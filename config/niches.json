@@ -1,0 +1,150 @@
+{
+  "Plumber": {
+    "FR": "plombier",
+    "EN": "plumber"
+  },
+  "Electrician": {
+    "FR": "electricien",
+    "EN": "electrician"
+  },
+  "HVAC / heating": {
+    "FR": "chauffagiste / climatisation",
+    "EN": "HVAC contractor"
+  },
+  "Roofer": {
+    "FR": "couvreur",
+    "EN": "roofer"
+  },
+  "General contractor": {
+    "FR": "entreprise de renovation / macon",
+    "EN": "general contractor"
+  },
+  "Landscaper": {
+    "FR": "paysagiste",
+    "EN": "landscaper"
+  },
+  "Locksmith": {
+    "FR": "serrurier",
+    "EN": "locksmith"
+  },
+  "Painter (building)": {
+    "FR": "peintre en batiment",
+    "EN": "painting contractor"
+  },
+  "Personal injury lawyer": {
+    "FR": "avocat dommage corporel",
+    "EN": "personal injury lawyer"
+  },
+  "General lawyer": {
+    "FR": "avocat",
+    "EN": "law firm"
+  },
+  "Accountant": {
+    "FR": "expert-comptable",
+    "EN": "accountant"
+  },
+  "Notary": {
+    "FR": "notaire",
+    "EN": "notary"
+  },
+  "Real estate agent": {
+    "FR": "agence immobiliere",
+    "EN": "real estate agent"
+  },
+  "Architect": {
+    "FR": "architecte",
+    "EN": "architect"
+  },
+  "Business consultant": {
+    "FR": "consultant en entreprise",
+    "EN": "business consultant"
+  },
+  "Auto mechanic": {
+    "FR": "garage automobile / mecanicien",
+    "EN": "auto repair shop"
+  },
+  "Body shop": {
+    "FR": "carrosserie",
+    "EN": "auto body shop"
+  },
+  "Tire shop": {
+    "FR": "pneus / centre auto",
+    "EN": "tire shop"
+  },
+  "Hair salon": {
+    "FR": "salon de coiffure",
+    "EN": "hair salon"
+  },
+  "Beauty salon": {
+    "FR": "institut de beaute",
+    "EN": "beauty salon"
+  },
+  "Nail salon": {
+    "FR": "salon d'ongles / prothesiste ongulaire",
+    "EN": "nail salon"
+  },
+  "Med spa": {
+    "FR": "medecine esthetique",
+    "EN": "med spa"
+  },
+  "Massage / spa": {
+    "FR": "spa / massage",
+    "EN": "spa"
+  },
+  "Barbershop": {
+    "FR": "barbier",
+    "EN": "barbershop"
+  },
+  "Dentist": {
+    "FR": "dentiste",
+    "EN": "dentist"
+  },
+  "Physiotherapist": {
+    "FR": "kinesitherapeute",
+    "EN": "physical therapist"
+  },
+  "Chiropractor": {
+    "FR": "chiropracteur",
+    "EN": "chiropractor"
+  },
+  "Veterinarian": {
+    "FR": "veterinaire",
+    "EN": "veterinarian"
+  },
+  "Personal trainer / gym": {
+    "FR": "salle de sport / coach sportif",
+    "EN": "gym / personal trainer"
+  },
+  "Restaurant": {
+    "FR": "restaurant",
+    "EN": "restaurant"
+  },
+  "Bakery": {
+    "FR": "boulangerie",
+    "EN": "bakery"
+  },
+  "Cafe": {
+    "FR": "cafe",
+    "EN": "coffee shop"
+  },
+  "Cleaning service": {
+    "FR": "entreprise de nettoyage",
+    "EN": "cleaning service"
+  },
+  "Moving company": {
+    "FR": "demenagement",
+    "EN": "moving company"
+  },
+  "Event planner": {
+    "FR": "organisateur d'evenements",
+    "EN": "event planner"
+  },
+  "Wedding photographer": {
+    "FR": "photographe mariage",
+    "EN": "wedding photographer"
+  },
+  "Childcare / daycare": {
+    "FR": "creche",
+    "EN": "daycare"
+  }
+}

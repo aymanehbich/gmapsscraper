@@ -1,0 +1,122 @@
+name: Google Maps Cloud Scraper & Outreach Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      niche:
+        description: "Target Niche (e.g. Plumber, Electrician, Dentist)"
+        required: true
+        default: "Plumber"
+      city:
+        description: "Target City (e.g. Austin, Lyon, Casablanca) or leave blank for all"
+        required: false
+        default: "Austin"
+      depth:
+        description: "Scroll Depth (items to fetch)"
+        required: false
+        default: "20"
+      enrich_emails:
+        description: "Crawl websites to find contact emails?"
+        type: boolean
+        default: true
+      send_to_n8n:
+        description: "Auto-push scraped leads to n8n email pipeline?"
+        type: boolean
+        default: true
+
+  # Optional: Uncomment below to run automatically on a daily schedule
+  # schedule:
+  #   - cron: '0 8 * * *' # Every day at 8:00 AM UTC
+
+jobs:
+  scrape-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout Scraper Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: 3. Install Python Dependencies
+        run: pip install -r requirements.txt
+
+      - name: 4. Pull Google Maps Scraper Docker Image
+        run: docker pull gosom/google-maps-scraper:latest
+
+      - name: 5. Load Proxies (if set in GitHub Secrets)
+        if: env.PROXIES_SECRET != ''
+        env:
+          PROXIES_SECRET: ${{ secrets.PROXIES_TXT }}
+        run: echo "$PROXIES_SECRET" > proxies.txt
+
+      - name: 6. Run Google Maps Scraper Orchestrator
+        run: |
+          CMD="python run_scraper.py --niche \"${{ inputs.niche }}\" --depth ${{ inputs.depth }}"
+          if [ -n "${{ inputs.city }}" ]; then
+            CMD="$CMD --city \"${{ inputs.city }}\""
+          fi
+          if [ "${{ inputs.enrich_emails }}" = "true" ]; then
+            CMD="$CMD --enrich-emails"
+          fi
+          if [ -f "proxies.txt" ] && [ -s "proxies.txt" ]; then
+            CMD="$CMD --proxy-file proxies.txt"
+          fi
+          echo "Executing: $CMD"
+          eval $CMD
+
+      - name: 7. Push Slim Leads Directly to n8n Webhook (0ms Delay)
+        if: ${{ inputs.send_to_n8n == true }}
+        run: |
+          python -c "
+          import json, os, glob, requests
+
+          lead_files = glob.glob('output/**/cleaned_leads.json', recursive=True)
+          all_leads = []
+          for f in lead_files:
+              with open(f, 'r', encoding='utf-8') as fh:
+                  data = json.load(fh)
+                  if isinstance(data, list):
+                      all_leads.extend(data)
+
+          print(f'Total leads scraped: {len(all_leads)}')
+
+          # Filter and slim (remove heavy Google reviews to make it fast & lightweight)
+          slim_leads = []
+          for lead in all_leads:
+              emails = lead.get('emails', [])
+              if not emails and lead.get('email'):
+                  emails = [lead.get('email')]
+              
+              if not emails:
+                  continue # only send leads with at least one email
+
+              slim_leads.append({
+                  'cid': lead.get('cid') or lead.get('placeId') or lead.get('title'),
+                  'title': lead.get('title'),
+                  'category': lead.get('category'),
+                  'emails': emails,
+                  'website': lead.get('website'),
+                  'city': lead.get('city'),
+                  'state': lead.get('state'),
+                  'phone': lead.get('phone')
+              })
+
+          print(f'Valid leads with emails ready for n8n: {len(slim_leads)}')
+
+          if slim_leads:
+              webhook_url = 'https://aymane-hbich-n8n-c2967382a5d9.herokuapp.com/webhook/leads'
+              res = requests.post(webhook_url, json=slim_leads)
+              print(f'n8n Webhook Response: {res.status_code} - {res.text}')
+          else:
+              print('No valid leads with emails found in this run.')
+          "
+
+      - name: 8. Save Leads as GitHub Artifact (Backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gmaps-leads-${{ inputs.niche }}-${{ inputs.city }}
+          path: output/

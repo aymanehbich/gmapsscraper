@@ -1,0 +1,139 @@
+{
+  "France": {
+    "lang": "FR",
+    "country_name": "France",
+    "cities": [
+      "Lyon",
+      "Bordeaux",
+      "Nantes",
+      "Toulouse",
+      "Lille",
+      "Strasbourg",
+      "Montpellier"
+    ]
+  },
+  "Belgium": {
+    "lang": "FR",
+    "country_name": "Belgique",
+    "cities": [
+      "Charleroi",
+      "Liege",
+      "Namur",
+      "Mons"
+    ]
+  },
+  "Switzerland": {
+    "lang": "FR",
+    "country_name": "Suisse",
+    "cities": [
+      "Geneva",
+      "Lausanne",
+      "Fribourg"
+    ]
+  },
+  "Luxembourg": {
+    "lang": "FR",
+    "country_name": "Luxembourg",
+    "cities": [
+      "Luxembourg City"
+    ]
+  },
+  "Canada_Quebec": {
+    "lang": "FR",
+    "country_name": "Canada",
+    "cities": [
+      "Quebec City",
+      "Sherbrooke",
+      "Trois-Rivieres"
+    ]
+  },
+  "Morocco": {
+    "lang": "FR",
+    "country_name": "Maroc",
+    "cities": [
+      "Casablanca",
+      "Rabat",
+      "Marrakech",
+      "Tangier"
+    ]
+  },
+  "Ivory_Coast": {
+    "lang": "FR",
+    "country_name": "Côte d'Ivoire",
+    "cities": [
+      "Abidjan"
+    ]
+  },
+  "Senegal": {
+    "lang": "FR",
+    "country_name": "Sénégal",
+    "cities": [
+      "Dakar"
+    ]
+  },
+  "Cameroon": {
+    "lang": "FR",
+    "country_name": "Cameroun",
+    "cities": [
+      "Douala",
+      "Yaounde"
+    ]
+  },
+  "DRC": {
+    "lang": "FR",
+    "country_name": "RDC",
+    "cities": [
+      "Kinshasa"
+    ]
+  },
+  "Gabon": {
+    "lang": "FR",
+    "country_name": "Gabon",
+    "cities": [
+      "Libreville"
+    ]
+  },
+  "United_Kingdom": {
+    "lang": "EN",
+    "country_name": "United Kingdom",
+    "cities": [
+      "Manchester",
+      "Leeds",
+      "Bristol",
+      "Nottingham"
+    ]
+  },
+  "United_States": {
+    "lang": "EN",
+    "country_name": "United States",
+    "cities": [
+      "Austin TX",
+      "Charlotte NC",
+      "Tampa FL"
+    ]
+  },
+  "Canada_Anglophone": {
+    "lang": "EN",
+    "country_name": "Canada",
+    "cities": [
+      "Calgary",
+      "Ottawa"
+    ]
+  },
+  "United_Arab_Emirates": {
+    "lang": "EN",
+    "country_name": "United Arab Emirates",
+    "cities": [
+      "Dubai",
+      "Sharjah"
+    ]
+  },
+  "Saudi_Arabia": {
+    "lang": "EN",
+    "country_name": "Saudi Arabia",
+    "cities": [
+      "Riyadh",
+      "Jeddah"
+    ]
+  }
+}
