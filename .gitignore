@@ -20,3 +20,5 @@ raw_results.json
 .idea/
 .DS_Store
 Thumbs.db
+
+output/
