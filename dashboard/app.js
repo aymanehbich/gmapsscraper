@@ -390,3 +390,168 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
+
+
+// ==========================================================================
+// Brevo Quota & Account Management
+// ==========================================================================
+
+const inputBrevoKey = document.getElementById('input-brevo-key');
+const btnToggleBrevoView = document.getElementById('btn-toggle-brevo-view');
+const btnRefreshQuota = document.getElementById('btn-refresh-quota');
+const quotaStatusBadge = document.getElementById('quota-status-badge');
+const quotaRemainingVal = document.getElementById('quota-remaining-val');
+const quotaCapVal = document.getElementById('quota-cap-val');
+const quotaSentVal = document.getElementById('quota-sent-val');
+const quotaPercentVal = document.getElementById('quota-percent-val');
+const quotaProgressBar = document.getElementById('quota-progress-bar');
+const quotaResetCountdown = document.getElementById('quota-reset-countdown');
+const brevoApiStatusNote = document.getElementById('brevo-api-status-note');
+const linkConfigureBrevo = document.getElementById('link-configure-brevo');
+
+function initBrevoIntegration() {
+  // Load stored Brevo key
+  const storedBrevoKey = localStorage.getItem('brevo_api_key');
+  if (storedBrevoKey && inputBrevoKey) {
+    inputBrevoKey.value = storedBrevoKey;
+  }
+
+  // Toggle Visibility
+  if (btnToggleBrevoView && inputBrevoKey) {
+    btnToggleBrevoView.addEventListener('click', () => {
+      const isPwd = inputBrevoKey.type === 'password';
+      inputBrevoKey.type = isPwd ? 'text' : 'password';
+      const icon = btnToggleBrevoView.querySelector('svg');
+      if (icon) icon.style.opacity = isPwd ? '1' : '0.5';
+    });
+  }
+
+  // Configure link click
+  if (linkConfigureBrevo) {
+    linkConfigureBrevo.addEventListener('click', (e) => {
+      e.preventDefault();
+      settingsPanel.classList.remove('hidden');
+      if (inputBrevoKey) inputBrevoKey.focus();
+    });
+  }
+
+  // Refresh quota click
+  if (btnRefreshQuota) {
+    btnRefreshQuota.addEventListener('click', () => {
+      btnRefreshQuota.querySelector('svg')?.classList.add('animate-spin');
+      fetchBrevoQuota().finally(() => {
+        btnRefreshQuota.querySelector('svg')?.classList.remove('animate-spin');
+      });
+    });
+  }
+
+  // Start UTC Reset countdown timer (updates every 60s)
+  updateResetCountdown();
+  setInterval(updateResetCountdown, 60000);
+
+  // Initial fetch
+  fetchBrevoQuota();
+}
+
+function updateResetCountdown() {
+  if (!quotaResetCountdown) return;
+  const now = new Date();
+  const nextUtcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+  const diffMs = nextUtcMidnight - now;
+  
+  if (diffMs > 0) {
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    quotaResetCountdown.textContent = `Resets in ${hours}h ${mins}m (00:00 UTC)`;
+  } else {
+    quotaResetCountdown.textContent = 'Quota resets soon (00:00 UTC)';
+  }
+}
+
+async function fetchBrevoQuota() {
+  const brevoKey = localStorage.getItem('brevo_api_key');
+  
+  if (!brevoKey) {
+    if (quotaRemainingVal) quotaRemainingVal.textContent = '300';
+    if (quotaSentVal) quotaSentVal.textContent = '0';
+    if (quotaPercentVal) quotaPercentVal.textContent = '0%';
+    if (quotaProgressBar) {
+      quotaProgressBar.style.width = '0%';
+      quotaProgressBar.className = 'quota-progress-bar';
+    }
+    if (brevoApiStatusNote) {
+      brevoApiStatusNote.innerHTML = '<a href="#" id="link-configure-brevo" class="link-highlight">Connect Brevo API Key</a>';
+      document.getElementById('link-configure-brevo')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        settingsPanel.classList.remove('hidden');
+        inputBrevoKey?.focus();
+      });
+    }
+    return;
+  }
+
+  if (brevoApiStatusNote) {
+    brevoApiStatusNote.innerHTML = '<span style="color: #10b981; font-weight: 500;">⚡ Live Brevo Synced</span>';
+  }
+
+  try {
+    const res = await fetch('https://api.brevo.com/v3/account', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'api-key': brevoKey
+      }
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) {
+        showToast('Invalid Brevo API Key', 'error');
+        if (quotaStatusBadge) {
+          quotaStatusBadge.className = 'badge badge-failure';
+          quotaStatusBadge.textContent = 'Invalid Key';
+        }
+      }
+      return;
+    }
+
+    const data = await res.json();
+    const plans = data.plan || [];
+    
+    // Find daily transactional / sendLimit plan
+    const sendPlan = plans.find(p => p.creditsType === 'sendLimit') || plans.find(p => p.type === 'free') || { credits: 300 };
+    const remainingCredits = typeof sendPlan.credits === 'number' ? Math.round(sendPlan.credits) : 300;
+    const totalDaily = 300;
+    const estimatedSent = Math.max(0, totalDaily - remainingCredits);
+    const percentUsed = Math.min(100, Math.round((estimatedSent / totalDaily) * 100));
+
+    if (quotaRemainingVal) quotaRemainingVal.textContent = remainingCredits;
+    if (quotaSentVal) quotaSentVal.textContent = estimatedSent;
+    if (quotaPercentVal) quotaPercentVal.textContent = `${percentUsed}%`;
+
+    if (quotaProgressBar) {
+      quotaProgressBar.style.width = `${percentUsed}%`;
+      if (remainingCredits <= 20) {
+        quotaProgressBar.className = 'quota-progress-bar danger';
+      } else if (remainingCredits <= 60) {
+        quotaProgressBar.className = 'quota-progress-bar warning';
+      } else {
+        quotaProgressBar.className = 'quota-progress-bar';
+      }
+    }
+
+    if (quotaStatusBadge) {
+      if (remainingCredits <= 20) {
+        quotaStatusBadge.className = 'badge badge-failure';
+        quotaStatusBadge.innerHTML = '<span class="pulse-dot" style="background:#ef4444;"></span> Cap Reached (Paused)';
+      } else if (remainingCredits <= 60) {
+        quotaStatusBadge.className = 'badge badge-warning';
+        quotaStatusBadge.innerHTML = '<span class="pulse-dot" style="background:#f59e0b;"></span> Low Quota';
+      } else {
+        quotaStatusBadge.className = 'badge badge-success';
+        quotaStatusBadge.innerHTML = '<span class="pulse-dot"></span> Active';
+      }
+    }
+  } catch (error) {
+    console.error('Brevo API Quota Error:', error);
+  }
+}

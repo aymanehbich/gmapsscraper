@@ -64,14 +64,25 @@
         </p>
 
         <div class="form-group">
-          <label for="input-pat">Personal Access Token (PAT)</label>
+          <label for="input-pat"><i data-lucide="github"></i> GitHub Personal Access Token (PAT)</label>
           <div class="input-password-wrap">
             <input type="password" id="input-pat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
             <button id="btn-toggle-pat-view" type="button" class="btn-eye" aria-label="Toggle token visibility">
               <i data-lucide="eye"></i>
             </button>
           </div>
-          <span class="input-hint">Saved securely in your browser's <code>localStorage</code>. Never sent elsewhere.</span>
+          <span class="input-hint">Saved in browser's <code>localStorage</code> to trigger scrapers.</span>
+        </div>
+
+        <div class="form-group" style="margin-top: 14px;">
+          <label for="input-brevo-key"><i data-lucide="mail"></i> Brevo API Key (Optional)</label>
+          <div class="input-password-wrap">
+            <input type="password" id="input-brevo-key" placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+            <button id="btn-toggle-brevo-view" type="button" class="btn-eye" aria-label="Toggle key visibility">
+              <i data-lucide="eye"></i>
+            </button>
+          </div>
+          <span class="input-hint">Fetches real-time 300/day email quota & credits directly from Brevo.</span>
         </div>
 
         <div class="settings-footer">
@@ -210,6 +221,63 @@
 
       <!-- Right Column: Status, Active Runs & Quick Stats -->
       <section class="monitor-section">
+        <!-- Brevo Email Quota Monitor Card -->
+        <div class="card glass-panel quota-monitor-card">
+          <div class="card-header">
+            <div class="card-title-wrap">
+              <i data-lucide="mail-check" class="text-accent"></i>
+              <h3>Brevo Daily Email Quota</h3>
+            </div>
+            <div class="header-right-tools">
+              <span id="quota-status-badge" class="badge badge-success"><span class="pulse-dot"></span> Active</span>
+              <button id="btn-refresh-quota" class="btn btn-ghost btn-sm btn-icon" title="Refresh Brevo balance">
+                <i data-lucide="refresh-cw"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="quota-body">
+            <div class="quota-stats-grid">
+              <div class="quota-stat-box">
+                <span class="stat-label">Remaining Today</span>
+                <div class="stat-value text-glow" id="quota-remaining-val">--</div>
+                <span class="stat-sub">of 300 Free Plan</span>
+              </div>
+              <div class="quota-stat-box">
+                <span class="stat-label">Safe Cap</span>
+                <div class="stat-value" id="quota-cap-val">280</div>
+                <span class="stat-sub">n8n Safe Limit</span>
+              </div>
+              <div class="quota-stat-box">
+                <span class="stat-label">Estimated Sent</span>
+                <div class="stat-value" id="quota-sent-val">--</div>
+                <span class="stat-sub">Today</span>
+              </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="quota-progress-wrap">
+              <div class="quota-progress-labels">
+                <span>Daily Consumption</span>
+                <span id="quota-percent-val">0%</span>
+              </div>
+              <div class="quota-progress-track">
+                <div class="quota-progress-bar" id="quota-progress-bar" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="quota-footer-info">
+              <div class="reset-timer-wrap">
+                <i data-lucide="clock" style="width: 14px; height: 14px;"></i>
+                <span id="quota-reset-countdown">Resets in calculating...</span>
+              </div>
+              <div id="brevo-api-status-note" class="api-note">
+                <a href="#" id="link-configure-brevo" class="link-highlight">Connect API Key</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Live Runs Card -->
         <div class="card glass-panel">
           <div class="card-header">

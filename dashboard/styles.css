@@ -1008,3 +1008,161 @@ code {
 .toast.toast-success svg { color: var(--success); }
 .toast.toast-error { border-color: var(--danger); }
 .toast.toast-error svg { color: var(--danger); }
+
+
+/* ==========================================================================
+   Brevo Email Quota Monitor Component
+   ========================================================================== */
+
+.quota-monitor-card {
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.quota-monitor-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #10b981, #6366f1, #d946ef);
+}
+
+.header-right-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quota-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.quota-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.quota-stat-box {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+
+.quota-stat-box:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.text-glow {
+  color: #34d399;
+  text-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+}
+
+.stat-sub {
+  font-size: 0.68rem;
+  color: var(--text-sub);
+  margin-top: 2px;
+}
+
+/* Progress Bar */
+.quota-progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quota-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.quota-progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.4);
+}
+
+.quota-progress-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, #10b981 0%, #3b82f6 70%, #8b5cf6 100%);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.quota-progress-bar.warning {
+  background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.quota-progress-bar.danger {
+  background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+/* Footer Info */
+.quota-footer-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding-top: 4px;
+}
+
+.reset-timer-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-sub);
+}
+
+.link-highlight {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 600;
+  transition: var(--transition-smooth);
+}
+
+.link-highlight:hover {
+  color: #a5b4fc;
+}
