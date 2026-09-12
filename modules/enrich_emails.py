@@ -7,13 +7,10 @@ from urllib.parse import urlparse, urljoin, unquote
 import requests
 from bs4 import BeautifulSoup
 
-# Common noise email prefixes/domains/file-extensions to filter out
-JUNK_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.css', '.js', '.pdf')
-JUNK_PATTERNS = [
-    'sentry', 'wixpress', 'example.com', 'domain.com', 'email.com', 'schema.org',
-    'bootstrap', 'wordpress', 'fontawesome', 'react', 'jquery', 'google', 'cloudflare',
-    'mysite.com', 'yourdomain', 'yourcompany', 'example@'
-]
+try:
+    from modules.email_validator import verify_email, filter_valid_emails, is_clean_syntax
+except ImportError:
+    from email_validator import verify_email, filter_valid_emails, is_clean_syntax
 
 HEADERS = {
     'User-Agent': (
@@ -37,25 +34,6 @@ def clean_url(url):
     return url
 
 
-def is_valid_email(email):
-    if not email:
-        return False
-    email_clean = unquote(email).strip().lower().lstrip('.')
-    if any(email_clean.endswith(ext) for ext in JUNK_EXTENSIONS):
-        return False
-    if any(junk in email_clean for junk in JUNK_PATTERNS):
-        return False
-    if email_clean in ('example@gmail.com', 'info@mysite.com', 'user@domain.com'):
-        return False
-    parts = email_clean.split('@')
-    if len(parts) != 2:
-        return False
-    domain_parts = parts[1].split('.')
-    if len(domain_parts) < 2 or len(domain_parts[-1]) < 2:
-        return False
-    return True
-
-
 def extract_emails_from_html(html_content):
     found = set()
     if not html_content:
@@ -64,7 +42,7 @@ def extract_emails_from_html(html_content):
     # 1. Regex find directly in raw text
     for raw_match in EMAIL_REGEX.findall(html_content):
         decoded = unquote(raw_match).strip().lower()
-        if is_valid_email(decoded):
+        if is_clean_syntax(decoded):
             found.add(decoded)
 
     # 2. BeautifulSoup mailto: links
@@ -75,7 +53,19 @@ def extract_emails_from_html(html_content):
             if href.lower().startswith('mailto:'):
                 email = href.split('mailto:')[1].split('?')[0].strip()
                 decoded = unquote(email).lower()
-                if is_valid_email(decoded):
+                if is_clean_syntax(decoded):
+                    found.add(decoded)
+    except Exception:
+        pass
+
+    # 3. Hidden comments, script tags or metadata
+    try:
+        if not soup:
+            soup = BeautifulSoup(html_content, 'html.parser')
+        for text in soup.stripped_strings:
+            for match in EMAIL_REGEX.findall(text):
+                decoded = unquote(match).strip().lower()
+                if is_clean_syntax(decoded):
                     found.add(decoded)
     except Exception:
         pass
@@ -83,53 +73,47 @@ def extract_emails_from_html(html_content):
     return found
 
 
-def find_contact_links(soup, base_url):
-    contact_urls = set()
-    if not soup:
-        return contact_urls
-
-    keywords = ['contact', 'about', 'reach', 'touch', 'support', 'help', 'team']
-    
-    for a_tag in soup.find_all('a', href=True):
-        href = a_tag['href'].strip()
-        text = a_tag.get_text().strip().lower()
-        href_lower = href.lower()
-
-        if any(kw in href_lower or kw in text for kw in keywords):
-            full_url = urljoin(base_url, href)
-            # Make sure it stays on the same domain
-            if urlparse(full_url).netloc == urlparse(base_url).netloc:
-                contact_urls.add(full_url)
-                if len(contact_urls) >= 3:  # Cap at top 3 candidate pages
-                    break
-
-    return contact_urls
-
-
 def fetch_emails_from_website(website_url, timeout=7):
     emails = set()
-    website_url = clean_url(website_url)
-    if not website_url:
-        return list(emails)
+    url = clean_url(website_url)
+    if not url:
+        return []
+
+    try:
+        domain = urlparse(url).netloc
+    except Exception:
+        return []
 
     session = requests.Session()
     session.headers.update(HEADERS)
 
+    # 1. Scrape Homepage
     try:
-        # Fetch homepage
-        resp = session.get(website_url, timeout=timeout, allow_redirects=True, verify=False)
+        resp = session.get(url, timeout=timeout, verify=False, allow_redirects=True)
         if resp.status_code == 200:
-            html = resp.text
-            emails.update(extract_emails_from_html(html))
-
-            # If no email found on homepage, check contact / about subpages
+            emails.update(extract_emails_from_html(resp.text))
+            
+            # If no email on homepage, look for Contact / About subpages
             if not emails:
-                soup = BeautifulSoup(html, 'parser' if False else 'html.parser')
-                contact_links = find_contact_links(soup, resp.url)
-
-                for link in contact_links:
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                contact_links = []
+                for a in soup.find_all('a', href=True):
+                    href = a['href'].strip()
+                    text = a.get_text().lower()
+                    
+                    # Target contact/about pages
+                    if any(k in href.lower() or k in text for k in ['contact', 'about', 'reach', 'team', 'support', 'impressum']):
+                        full_url = urljoin(url, href)
+                        # Keep within same domain
+                        if urlparse(full_url).netloc == domain and full_url not in contact_links:
+                            contact_links.append(full_url)
+                            if len(contact_links) >= 3:  # Limit subpages to keep speed fast
+                                break
+                
+                # Scrape candidate contact pages
+                for c_url in contact_links:
                     try:
-                        c_resp = session.get(link, timeout=timeout, allow_redirects=True, verify=False)
+                        c_resp = session.get(c_url, timeout=timeout, verify=False)
                         if c_resp.status_code == 200:
                             c_emails = extract_emails_from_html(c_resp.text)
                             emails.update(c_emails)
@@ -140,26 +124,35 @@ def fetch_emails_from_website(website_url, timeout=7):
     except Exception:
         pass
 
-    return list(emails)
+    # Perform Deep Deliverability & MX Verification on all found candidate emails
+    if emails:
+        valid_deliverable = filter_valid_emails(list(emails))
+        return valid_deliverable
+
+    return []
 
 
 def process_lead(lead, timeout):
     existing_emails = lead.get('emails', []) or []
     website = lead.get('website')
 
-    # If emails are already present, keep them
+    # If existing emails are already present, verify their deliverability
     if existing_emails:
-        return lead, 0
+        valid_existing = filter_valid_emails(existing_emails)
+        lead['emails'] = valid_existing
+        if valid_existing:
+            return lead, 0
 
     if not website:
         return lead, 0
 
     found_emails = fetch_emails_from_website(website, timeout=timeout)
     if found_emails:
-        # Deduplicate while preserving order
         combined = list(dict.fromkeys(existing_emails + found_emails))
-        lead['emails'] = combined
-        return lead, len(found_emails)
+        # Keep strictly deliverable emails
+        valid_combined = filter_valid_emails(combined)
+        lead['emails'] = valid_combined
+        return lead, len(valid_combined)
 
     return lead, 0
 
@@ -214,14 +207,14 @@ def enrich_file(json_filepath, max_workers=12, timeout=7):
                 pass
 
             if completed % 5 == 0 or completed == total_to_process:
-                print(f"--> Progress: {completed}/{total_to_process} websites scanned | Enriched: {enriched_count} leads ({new_emails_found} emails found)", flush=True)
+                print(f"--> Progress: {completed}/{total_to_process} websites scanned | Verified Enriched: {enriched_count} leads ({new_emails_found} valid emails)", flush=True)
 
     # Save updated JSON back to workspace
     with open(json_filepath, 'w', encoding='utf-8') as f:
         json.dump(leads, f, indent=2, ensure_ascii=False)
 
-    print(f"Saved enriched data to {json_filepath}", flush=True)
-    print(f"Successfully added {new_emails_found} emails across {enriched_count} leads!", flush=True)
+    print(f"Saved verified enriched data to {json_filepath}", flush=True)
+    print(f"Successfully added {new_emails_found} verified deliverable emails across {enriched_count} leads!", flush=True)
 
 
 def find_all_cleaned_leads(root_dir="output"):
@@ -234,7 +227,7 @@ def find_all_cleaned_leads(root_dir="output"):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Enrich Scraped JSON Leads with Emails from Websites")
+    parser = argparse.ArgumentParser(description="Enrich Scraped JSON Leads with Verified Deliverable Emails")
     parser.add_argument("--file", help="Path to specific cleaned_leads.json file")
     parser.add_argument("--dir", default="output", help="Directory to search recursively for cleaned_leads.json (default: output)")
     parser.add_argument("--threads", type=int, default=12, help="Number of concurrent scraper threads (default: 12)")
@@ -252,16 +245,16 @@ def main():
         return
 
     print("=" * 60)
-    print(f"Starting Email Enrichment Engine")
+    print(f"Starting Deliverability-Verified Email Enrichment Engine")
     print(f"Found {len(files)} JSON lead file(s) to process")
-    print(f"Threads: {args.threads} | Timeout: {args.timeout}s")
+    print(f"Threads: {args.threads} | Timeout: {args.timeout}s | Deliverability Check: ACTIVE")
     print("=" * 60)
 
     for f in files:
         enrich_file(f, max_workers=args.threads, timeout=args.timeout)
 
     print("\n" + "=" * 60)
-    print("Email Enrichment Completed Successfully!")
+    print("Email Enrichment & Deliverability Validation Completed!")
     print("=" * 60)
 
 

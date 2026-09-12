@@ -1,6 +1,15 @@
 import json
 import sys
 
+try:
+    from modules.email_validator import filter_valid_emails
+except ImportError:
+    try:
+        from email_validator import filter_valid_emails
+    except ImportError:
+        def filter_valid_emails(emails):
+            return emails
+
 
 def clean_and_deduplicate_leads(input_file, output_file, default_city=None, default_country=None, default_category=None):
   cleaned_leads = []
@@ -34,6 +43,10 @@ def clean_and_deduplicate_leads(input_file, output_file, default_city=None, defa
             emails_list.append(e)
           elif isinstance(e, dict) and "email" in e:
             emails_list.append(e["email"])
+
+      # Apply deliverability filter
+      if emails_list:
+        emails_list = filter_valid_emails(emails_list)
 
       # Extract reviews from 'user_reviews'
       raw_reviews = item.get("user_reviews", []) or []
