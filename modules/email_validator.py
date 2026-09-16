@@ -3,26 +3,30 @@ import socket
 import smtplib
 from urllib.parse import unquote
 
-# In-memory DNS MX cache to prevent redundant queries
+# In-memory DNS MX/Host cache to prevent redundant queries
 _MX_CACHE = {}
 
-# Common junk extensions and asset noise patterns
+# Junk asset extensions falsely captured by regex in web pages
 JUNK_EXTENSIONS = (
     '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif',
     '.css', '.js', '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z', '.woff', '.woff2', '.ttf',
     '.mp3', '.mp4', '.avi', '.mov', '.webm', '.exe', '.dmg', '.iso', '.map'
 )
 
-# Template placeholders, theme demos, and automated bot traps
-JUNK_PATTERNS = [
-    'sentry', 'wixpress', 'example.com', 'domain.com', 'email.com', 'schema.org',
-    'bootstrap', 'wordpress', 'fontawesome', 'react', 'jquery', 'cloudflare',
-    'mysite.com', 'yourdomain', 'yourcompany', 'example@', 'test@', 'admin@example',
-    'user@domain', 'contact@yourdomain', 'info@mysite', 'username@', 'mywebsite.com',
-    'themeforest', 'envato', 'elementor', 'webflow.io', 'squarespace.com', 'weebly.com',
-    'shopify.com', 'godaddy.com', 'johndoe', 'janedoe', 'yourname', 'firstname', 'lastname',
-    'sample@', 'lorem', 'ipsum', 'placeholder', 'nobody@', 'dummy@'
-]
+# Explicit placeholder and dummy domains (exact domain match or domain ending)
+JUNK_DOMAINS = {
+    'example.com', 'domain.com', 'mysite.com', 'mywebsite.com', 'yourdomain.com',
+    'yourcompany.com', 'sample.com', 'test.com', 'schema.org', 'wixpress.com',
+    'sentry.io', 'themeforest.net', 'envato.com', 'elementor.com', 'weebly.com',
+    'bootstrap.com', 'fontawesome.com', 'tempuri.org', 'localhost', 'test.test'
+}
+
+# Explicit dummy/placeholder local parts (e.g., test@..., dummy@...)
+JUNK_LOCAL_PARTS = {
+    'example', 'test', 'sample', 'placeholder', 'nobody', 'dummy',
+    'username', 'yourname', 'firstname', 'lastname', 'user', 'johndoe',
+    'janedoe', 'lorem', 'ipsum'
+}
 
 # Role-based addresses that lead to bounces, spam traps, or automated rejections
 ROLE_BASED_PREFIXES = (
@@ -53,7 +57,7 @@ def sanitize_email_candidate(email: str) -> str:
 
 
 def is_clean_syntax(email: str) -> bool:
-    """Checks format, extensions, role-based traps, and noise patterns."""
+    """Checks format, extensions, role-based traps, and dummy placeholder patterns."""
     clean = sanitize_email_candidate(email)
     if not clean or len(clean) > 254:
         return False
@@ -71,9 +75,6 @@ def is_clean_syntax(email: str) -> bool:
     if any(clean.startswith(prefix) for prefix in ROLE_BASED_PREFIXES):
         return False
 
-    if any(junk in clean for junk in JUNK_PATTERNS):
-        return False
-
     parts = clean.split('@')
     if len(parts) != 2:
         return False
@@ -82,20 +83,30 @@ def is_clean_syntax(email: str) -> bool:
     if len(local_part) < 1 or len(domain) < 3:
         return False
 
-    # Domain must contain at least one dot and a valid TLD
-    if '.' not in domain or domain.endswith('.'):
+    # Check exact dummy local parts
+    if local_part in JUNK_LOCAL_PARTS:
         return False
 
-    if domain in DISPOSABLE_DOMAINS:
+    # Check exact dummy / disposable domains
+    if domain in JUNK_DOMAINS or domain in DISPOSABLE_DOMAINS:
+        return False
+
+    for jd in JUNK_DOMAINS:
+        if domain.endswith('.' + jd):
+            return False
+
+    # Domain must contain at least one dot and a valid TLD
+    if '.' not in domain or domain.endswith('.'):
         return False
 
     return True
 
 
-def get_mx_records(domain: str, timeout: float = 2.0):
+def get_mx_records(domain: str, timeout: float = 2.5):
     """
     Fetches DNS MX records for domain.
-    Caches results in _MX_CACHE for maximum speed.
+    Falls back to domain A/AAAA records under RFC 5321 when no MX is defined.
+    Caches results in _MX_CACHE for high performance.
     """
     domain = domain.lower().strip()
     if domain in _MX_CACHE:
@@ -103,21 +114,33 @@ def get_mx_records(domain: str, timeout: float = 2.0):
 
     mx_hosts = []
 
-    # Try dnspython first
+    # 1. Try dnspython MX lookup with fallback DNS servers
     try:
         import dns.resolver
         resolver = dns.resolver.Resolver()
+        resolver.nameservers = ['8.8.8.8', '1.1.1.1', '8.8.4.4']
         resolver.lifetime = timeout
         resolver.timeout = timeout
         answers = resolver.resolve(domain, 'MX')
         mx_hosts = [str(r.exchange).rstrip('.') for r in answers]
     except Exception:
-        # Fallback to standard socket A/AAAA check if dnspython not available or MX resolution fails
+        # Fallback to checking standard A record resolution
         try:
-            socket.getaddrinfo(domain, 25, proto=socket.IPPROTO_TCP)
-            mx_hosts = [domain]
+            import dns.resolver
+            resolver = dns.resolver.Resolver()
+            resolver.nameservers = ['8.8.8.8', '1.1.1.1']
+            resolver.lifetime = timeout
+            resolver.timeout = timeout
+            answers = resolver.resolve(domain, 'A')
+            if answers:
+                mx_hosts = [domain]
         except Exception:
-            mx_hosts = []
+            # Fallback to standard socket getaddrinfo
+            try:
+                socket.getaddrinfo(domain, 80, proto=socket.IPPROTO_TCP)
+                mx_hosts = [domain]
+            except Exception:
+                mx_hosts = []
 
     _MX_CACHE[domain] = mx_hosts
     return mx_hosts
@@ -126,54 +149,59 @@ def get_mx_records(domain: str, timeout: float = 2.0):
 def check_smtp_mailbox(mx_host: str, recipient_email: str, timeout: float = 2.0) -> bool:
     """
     Performs non-intrusive SMTP Handshake (HELO -> MAIL FROM -> RCPT TO).
-    Returns True if accepted (250) or if server doesn't reject explicitly.
-    Returns False on hard bounce codes (550, 551, 553, 554).
+    Returns True on 250 (OK) or if connection is refused/firewalled.
+    Only returns False on explicit permanent user rejection (550, 551, 553, 554).
     """
     try:
         smtp = smtplib.SMTP(timeout=timeout)
         code, _ = smtp.connect(mx_host, 25)
         if code != 220:
-            smtp.close()
+            try:
+                smtp.close()
+            except Exception:
+                pass
             return True
 
         smtp.helo('validator.local')
         smtp.mail('verify@validator.local')
         rcpt_code, _ = smtp.rcpt(recipient_email)
-        smtp.quit()
+        try:
+            smtp.quit()
+        except Exception:
+            pass
 
-        # 250 / 251 = Mailbox definitively exists & accepts mail
-        if rcpt_code in (250, 251):
-            return True
-
-        # 550 / 551 / 553 / 554 = Definite rejection / User Unknown
+        # 550 / 551 / 553 / 554 = Definite mailbox rejection
         if rcpt_code in (550, 551, 552, 553, 554):
             return False
 
         return True
     except Exception:
-        # If port 25 times out or is blocked by local ISP, MX record existence was confirmed
+        # Port 25 blocked on cloud/ISP -> treat as valid if DNS MX/A was confirmed
         return True
 
 
-def verify_email(email: str, perform_smtp_check: bool = True) -> bool:
+def verify_email(email: str, perform_smtp_check: bool = False) -> bool:
     """
-    Full 3-layer deliverability verification:
-    1. Syntax & Junk filter
-    2. DNS MX Record lookup
-    3. SMTP Handshake
+    Multi-layer deliverability verification:
+    1. Syntax & Junk filter (fast, precise)
+    2. DNS MX / Host record lookup (with Google DNS fallback)
+    3. Optional SMTP handshake (non-blocking)
     """
     if not is_clean_syntax(email):
         return False
 
     clean_email = sanitize_email_candidate(email)
-    domain = clean_email.split('@')[1]
+    parts = clean_email.split('@')
+    if len(parts) != 2:
+        return False
+    domain = parts[1]
 
-    # Layer 2: DNS MX Records
+    # Layer 2: DNS MX / A Records
     mx_records = get_mx_records(domain)
     if not mx_records:
         return False
 
-    # Layer 3: SMTP Handshake
+    # Layer 3: Optional SMTP Handshake
     if perform_smtp_check and mx_records:
         primary_mx = mx_records[0]
         is_mailbox_active = check_smtp_mailbox(primary_mx, clean_email)
