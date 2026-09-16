@@ -868,17 +868,24 @@ async function handleAiSubmit(e) {
     return;
   }
 
-  const provider = localStorage.getItem('ai_provider') || (apiKey.startsWith('sk-or-') ? 'openrouter' : (apiKey.startsWith('AIzaSy') ? 'gemini' : 'openrouter'));
+  // Smart Provider Detection
+  let provider = localStorage.getItem('ai_provider') || 'openrouter';
+  if (apiKey.startsWith('sk-or-') || apiKey.startsWith('sk-')) {
+    provider = 'openrouter';
+  } else if (apiKey.startsWith('AIzaSy')) {
+    provider = 'gemini';
+  }
+
   const model = localStorage.getItem('openrouter_model') || 'deepseek/deepseek-chat';
 
   // Append Thinking Indicator
   const loaderId = `ai-loader-${Date.now()}`;
-  const modelLabel = provider === 'openrouter' ? model : 'Gemini 1.5';
+  const modelLabel = provider === 'openrouter' ? (model.split('/')[1] || model) : 'Gemini';
   appendAiMessage(`<span id="${loaderId}">Thinking with <strong>${modelLabel}</strong>...</span>`, 'bot');
 
   try {
     let aiResponse;
-    if (provider === 'gemini' || apiKey.startsWith('AIzaSy')) {
+    if (provider === 'gemini') {
       aiResponse = await callGeminiApi(apiKey, userText);
     } else {
       aiResponse = await callOpenRouterApi(apiKey, model, userText);
@@ -911,7 +918,7 @@ function appendAiMessage(htmlContent, sender = 'bot') {
 
 async function callOpenRouterApi(apiKey, model, userPrompt) {
   const url = 'https://openrouter.ai/api/v1/chat/completions';
-  const targetModel = model || 'deepseek/deepseek-chat';
+  const targetModel = model && model.trim() ? model.trim() : 'deepseek/deepseek-chat';
 
   const payload = {
     model: targetModel,
@@ -925,9 +932,9 @@ async function callOpenRouterApi(apiKey, model, userPrompt) {
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${apiKey.trim()}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': window.location.origin || 'https://aymanehbich.com',
+      'HTTP-Referer': 'https://aymanehbich.com',
       'X-Title': 'LeadLaunch AI Outreach Copilot'
     },
     body: JSON.stringify(payload)
@@ -935,16 +942,20 @@ async function callOpenRouterApi(apiKey, model, userPrompt) {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `OpenRouter error (${response.status})`);
+    throw new Error(err.error?.message || err.message || `OpenRouter API error (${response.status})`);
   }
 
   const result = await response.json();
   const text = result.choices?.[0]?.message?.content || '';
+  if (!text) {
+    throw new Error('OpenRouter returned an empty response. Please check model or credits.');
+  }
   return text;
 }
 
 async function callGeminiApi(apiKey, userPrompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // Use gemini-1.5-flash-latest or gemini-2.0-flash
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey.trim()}`;
   const payload = {
     contents: [
       {
