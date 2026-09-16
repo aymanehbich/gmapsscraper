@@ -25,6 +25,7 @@ let inputPat, btnSavePat, btnSettingsToggle, btnCloseSettings, settingsPanel, pa
 let scrapeForm, inputNiche, selectCountry, inputCity, inputDepth, depthVal, toggleEnrich, toggleN8n, btnLaunch;
 let nicheChips, cityChips, runsContainer, btnRefreshRuns, toastContainer;
 let selectService, inputCustomService, btnToggleCopy, copyPanel, inputCustomSubject, inputCustomPitch, inputDemoLink;
+let inputAiKey, btnToggleAiView, btnToggleAi, aiChatDrawer, btnCloseAi, btnClearAi, aiMessages, aiChatForm, inputAiPrompt;
 
 // Brevo Elements
 let inputBrevoKey, btnToggleBrevoView, btnRefreshQuota, quotaStatusBadge;
@@ -59,6 +60,16 @@ document.addEventListener('DOMContentLoaded', () => {
   inputCustomSubject = document.getElementById('input-custom-subject');
   inputCustomPitch = document.getElementById('input-custom-pitch');
   inputDemoLink = document.getElementById('input-demo-link');
+
+  inputAiKey = document.getElementById('input-ai-key');
+  btnToggleAiView = document.getElementById('btn-toggle-ai-view');
+  btnToggleAi = document.getElementById('btn-toggle-ai');
+  aiChatDrawer = document.getElementById('ai-chat-drawer');
+  btnCloseAi = document.getElementById('btn-close-ai');
+  btnClearAi = document.getElementById('btn-clear-ai');
+  aiMessages = document.getElementById('ai-messages');
+  aiChatForm = document.getElementById('ai-chat-form');
+  inputAiPrompt = document.getElementById('input-ai-prompt');
 
   nicheChips = document.getElementById('niche-chips');
   cityChips = document.getElementById('city-chips');
@@ -172,14 +183,20 @@ function setupEventListeners() {
       const brevoVal = inputBrevoKey ? inputBrevoKey.value.trim() : '';
       if (brevoVal) {
         localStorage.setItem('brevo_api_key', brevoVal);
-        showToast('Settings & Brevo API Key saved!', 'success');
-        fetchBrevoQuota();
       } else {
         localStorage.removeItem('brevo_api_key');
-        showToast('Settings saved!', 'success');
-        fetchBrevoQuota();
       }
 
+      // Save AI Key
+      const aiVal = inputAiKey ? inputAiKey.value.trim() : '';
+      if (aiVal) {
+        localStorage.setItem('ai_api_key', aiVal);
+      } else {
+        localStorage.removeItem('ai_api_key');
+      }
+
+      showToast('Settings saved successfully!', 'success');
+      fetchBrevoQuota();
       closeSettings();
       fetchRuns();
     });
@@ -686,18 +703,285 @@ function formatTimeAgo(date) {
 function showToast(message, type = 'info') {
   if (!toastContainer) return;
   const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
+  toast.className = `toast ${type}`;
 
-  const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'info';
-  toast.innerHTML = `<i data-lucide="${iconName}"></i> <span>${message}</span>`;
-
+  toast.innerHTML = `<span>${message}</span>`;
   toastContainer.appendChild(toast);
-  if (window.lucide) window.lucide.createIcons();
 
   setTimeout(() => {
     toast.style.opacity = '0';
-    toast.style.transform = 'translateY(100%)';
-    toast.style.transition = 'all 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 4000);
+    toast.style.transform = 'translateY(10px)';
+    toast.style.transition = 'all 0.2s ease';
+    setTimeout(() => toast.remove(), 250);
+  }, 3500);
+}
+
+// ==========================================================================
+// AI Assistant & Campaign Copilot
+// ==========================================================================
+
+function initAiAssistant() {
+  const storedAiKey = localStorage.getItem('ai_api_key');
+  if (storedAiKey && inputAiKey) {
+    inputAiKey.value = storedAiKey;
+  }
+
+  if (btnToggleAiView && inputAiKey) {
+    btnToggleAiView.addEventListener('click', () => {
+      const isPwd = inputAiKey.type === 'password';
+      inputAiKey.type = isPwd ? 'text' : 'password';
+    });
+  }
+
+  // Toggle AI Drawer
+  if (btnToggleAi && aiChatDrawer) {
+    btnToggleAi.addEventListener('click', () => {
+      aiChatDrawer.classList.toggle('hidden');
+      if (!aiChatDrawer.classList.contains('hidden') && inputAiPrompt) {
+        inputAiPrompt.focus();
+      }
+    });
+  }
+
+  // Close AI Drawer
+  if (btnCloseAi && aiChatDrawer) {
+    btnCloseAi.addEventListener('click', () => {
+      aiChatDrawer.classList.add('hidden');
+    });
+  }
+
+  // Clear Messages
+  if (btnClearAi && aiMessages) {
+    btnClearAi.addEventListener('click', () => {
+      aiMessages.innerHTML = `
+        <div class="ai-msg ai-msg-bot">
+          <div class="ai-bubble">
+            <p>Chat cleared. Tell me what campaign, niche, or pitch you want to create!</p>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // Quick Prompt Chips
+  document.querySelectorAll('.ai-prompt-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const promptText = chip.dataset.prompt;
+      if (inputAiPrompt) {
+        inputAiPrompt.value = promptText;
+        if (aiChatForm) {
+          aiChatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }
+    });
+  });
+
+  // Chat Form Submit
+  if (aiChatForm) {
+    aiChatForm.addEventListener('submit', handleAiSubmit);
+  }
+}
+
+async function handleAiSubmit(e) {
+  e.preventDefault();
+  const userText = inputAiPrompt ? inputAiPrompt.value.trim() : '';
+  if (!userText) return;
+
+  // Append User Message
+  appendAiMessage(userText, 'user');
+  inputAiPrompt.value = '';
+
+  const apiKey = localStorage.getItem('ai_api_key');
+  if (!apiKey) {
+    appendAiMessage(`⚠️ <strong>AI API Key Required</strong><br>Please open <a href="#" id="link-open-ai-settings" style="color:#818cf8; text-decoration:underline;">Settings</a> and paste your free Google Gemini API Key (or OpenAI key) to enable AI generation.`, 'bot');
+    const linkEl = document.getElementById('link-open-ai-settings');
+    if (linkEl) {
+      linkEl.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        openSettings('ai');
+      });
+    }
+    return;
+  }
+
+  // Append Thinking Indicator
+  const loaderId = `ai-loader-${Date.now()}`;
+  appendAiMessage(`<span id="${loaderId}">Thinking & crafting campaign copy...</span>`, 'bot');
+
+  try {
+    const aiResponse = await callGeminiApi(apiKey, userText);
+    const loaderEl = document.getElementById(loaderId);
+    if (loaderEl && loaderEl.closest('.ai-msg')) {
+      loaderEl.closest('.ai-msg').remove();
+    }
+
+    renderAiBotResponse(aiResponse);
+  } catch (error) {
+    const loaderEl = document.getElementById(loaderId);
+    if (loaderEl && loaderEl.closest('.ai-msg')) {
+      loaderEl.closest('.ai-msg').remove();
+    }
+    appendAiMessage(`❌ <strong>Error:</strong> ${error.message || 'Failed to connect to AI API.'}`, 'bot');
+  }
+}
+
+function appendAiMessage(htmlContent, sender = 'bot') {
+  if (!aiMessages) return;
+  const msgEl = document.createElement('div');
+  msgEl.className = `ai-msg ai-msg-${sender}`;
+  msgEl.innerHTML = `<div class="ai-bubble">${htmlContent}</div>`;
+  aiMessages.appendChild(msgEl);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+async function callGeminiApi(apiKey, userPrompt) {
+  const systemInstruction = `You are the LeadLaunch AI Outreach Copilot for Aymane. You generate cold email pitches, subject lines, and campaign setups for B2B local business outreach (Plumbers, Electricians, Dentists, Roofers, etc.) in English or French.
+When the user asks for a pitch, campaign, or service, craft a compelling, concise 2-sentence pitch with natural variables (like {{title}}, {{city}}, {{category}}, {{demoLink}}).
+IMPORTANT: At the end of your response, output a JSON block wrapped in \`\`\`json containing the campaign parameters so the user can apply it in 1 click:
+\`\`\`json
+{
+  "campaignConfig": {
+    "niche": "Target Niche",
+    "country": "United_States or France or Morocco or United_Kingdom",
+    "city": "City name",
+    "service": "web_design or custom key",
+    "custom_subject": "Subject with {{title}} and {{city}}",
+    "custom_pitch": "Punchy 2-sentence pitch",
+    "demo_link": "https://demo.aymanehbich.com/showcase",
+    "depth": 20
+  }
+}
+\`\`\``;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const payload = {
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: `${systemInstruction}\n\nUser Request: ${userPrompt}` }]
+      }
+    ]
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error (${response.status})`);
+  }
+
+  const result = await response.json();
+  const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return text;
+}
+
+function renderAiBotResponse(responseText) {
+  let cleanText = responseText;
+  let campaignData = null;
+
+  // Extract JSON Campaign Config block if present
+  const jsonMatch = responseText.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (parsed.campaignConfig) {
+        campaignData = parsed.campaignConfig;
+        cleanText = responseText.replace(/```json[\s\S]*?```/, '').trim();
+      }
+    } catch (e) {}
+  }
+
+  // Format markdown paragraphs
+  const formattedHtml = cleanText
+    .split('\n\n')
+    .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+
+  const botMsg = document.createElement('div');
+  botMsg.className = 'ai-msg ai-msg-bot';
+  
+  let actionCardHtml = '';
+  if (campaignData) {
+    actionCardHtml = `
+      <div class="ai-campaign-card">
+        <div class="ai-campaign-row"><span class="ai-campaign-label">Niche:</span><span class="ai-campaign-val">${campaignData.niche || 'N/A'}</span></div>
+        <div class="ai-campaign-row"><span class="ai-campaign-label">Location:</span><span class="ai-campaign-val">${campaignData.city || 'All'} (${campaignData.country || 'USA'})</span></div>
+        <div class="ai-campaign-row"><span class="ai-campaign-label">Subject:</span><span class="ai-campaign-val">${campaignData.custom_subject || 'Default'}</span></div>
+        <button type="button" class="btn-apply-campaign" data-config='${JSON.stringify(campaignData).replace(/'/g, "&apos;")}'>
+          <i data-lucide="zap"></i> Apply to Campaign Launcher
+        </button>
+      </div>
+    `;
+  }
+
+  botMsg.innerHTML = `<div class="ai-bubble">${formattedHtml}${actionCardHtml}</div>`;
+  aiMessages.appendChild(botMsg);
+  aiMessages.scrollTop = aiMessages.scrollHeight;
+
+  // Wire click handler for Apply to Launcher
+  const applyBtn = botMsg.querySelector('.btn-apply-campaign');
+  if (applyBtn) {
+    applyBtn.addEventListener('click', () => {
+      try {
+        const config = JSON.parse(applyBtn.dataset.config);
+        applyCampaignToLauncher(config);
+      } catch (e) {
+        console.error('Error applying config:', e);
+      }
+    });
+  }
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function applyCampaignToLauncher(cfg) {
+  if (!cfg) return;
+
+  if (cfg.niche && inputNiche) {
+    inputNiche.value = cfg.niche;
+    document.querySelectorAll('#niche-chips .chip').forEach(c => {
+      c.classList.toggle('active', c.dataset.niche?.toLowerCase() === cfg.niche.toLowerCase());
+    });
+  }
+
+  if (cfg.country && selectCountry) {
+    selectCountry.value = cfg.country;
+    updateCityChips(cfg.country);
+  }
+
+  if (cfg.city && inputCity) {
+    inputCity.value = cfg.city;
+  }
+
+  if (cfg.depth && inputDepth) {
+    inputDepth.value = cfg.depth;
+    if (depthVal) depthVal.textContent = cfg.depth;
+    updateDepthEstimate(cfg.depth);
+  }
+
+  if (cfg.custom_subject && inputCustomSubject) {
+    inputCustomSubject.value = cfg.custom_subject;
+  }
+
+  if (cfg.custom_pitch && inputCustomPitch) {
+    inputCustomPitch.value = cfg.custom_pitch;
+  }
+
+  if (cfg.demo_link && inputDemoLink) {
+    inputDemoLink.value = cfg.demo_link;
+  }
+
+  // Open the custom copy accordion if custom copy was set
+  if ((cfg.custom_subject || cfg.custom_pitch) && copyPanel) {
+    copyPanel.classList.remove('hidden');
+    const icon = document.getElementById('accordion-icon');
+    if (icon) icon.style.transform = 'rotate(180deg)';
+  }
+
+  showToast(`⚡ Applied AI Campaign for ${cfg.niche || 'Niche'} in ${cfg.city || 'Location'}!`, 'success');
 }

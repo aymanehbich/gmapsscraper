@@ -75,10 +75,21 @@
             </div>
             <p class="field-hint">Tracks remaining daily 300 free email credits.</p>
           </div>
+
+          <div class="form-group">
+            <label for="input-ai-key">Gemini / OpenAI API Key (For AI Assistant)</label>
+            <div class="input-wrap">
+              <input type="password" id="input-ai-key" placeholder="AIzaSy... or sk-..." autocomplete="off">
+              <button id="btn-toggle-ai-view" type="button" class="btn-icon" aria-label="Toggle visibility">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+            <p class="field-hint">Powers the in-dashboard AI Campaign & Pitch Assistant.</p>
+          </div>
         </div>
         <div class="modal-footer">
-          <a href="https://github.com/settings/tokens/new?scopes=workflow,repo&description=LeadLaunch" target="_blank" rel="noopener" class="link-sub">
-            Create GitHub token &rarr;
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="link-sub">
+            Get free Gemini API key &rarr;
           </a>
           <button id="btn-save-pat" class="btn btn-primary">Save Settings</button>
         </div>
@@ -304,6 +315,69 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- Floating AI Assistant Trigger -->
+  <button id="btn-toggle-ai" class="ai-fab" title="Chat with AI Campaign Assistant">
+    <i data-lucide="sparkles"></i>
+    <span>AI Assistant</span>
+  </button>
+
+  <!-- AI Assistant Chat Drawer -->
+  <div id="ai-chat-drawer" class="ai-drawer hidden">
+    <div class="ai-drawer-header">
+      <div class="ai-header-left">
+        <div class="ai-avatar">
+          <i data-lucide="bot"></i>
+        </div>
+        <div>
+          <h4>AI Campaign Assistant</h4>
+          <span class="ai-status">⚡ Campaign & Pitch Copilot</span>
+        </div>
+      </div>
+      <div class="ai-header-actions">
+        <button id="btn-clear-ai" class="btn-icon-sm" title="Clear chat">
+          <i data-lucide="trash-2"></i>
+        </button>
+        <button id="btn-close-ai" class="btn-icon-sm" title="Minimize chat">
+          <i data-lucide="chevron-down"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Quick Prompt Pills -->
+    <div class="ai-quick-prompts">
+      <button type="button" class="ai-prompt-chip" data-prompt="Write a punchy cold email pitch for Plumbers in Austin focusing on fast emergency booking.">
+        🚰 Plumber Pitch (EN)
+      </button>
+      <button type="button" class="ai-prompt-chip" data-prompt="Rédige une proposition percutante en français pour des Électriciens à Lyon pour moderniser leur site web.">
+        ⚡ Pitch Électricien (FR)
+      </button>
+      <button type="button" class="ai-prompt-chip" data-prompt="Set up a Google Maps Top 3 ranking campaign for Dentists in Miami with a high converting subject line.">
+        📍 Local SEO Campaign
+      </button>
+      <button type="button" class="ai-prompt-chip" data-prompt="Write an automated 5-star Google review collection pitch for Restaurants in Casablanca.">
+        ⭐ Review Automation Pitch
+      </button>
+    </div>
+
+    <!-- Chat Messages Feed -->
+    <div id="ai-messages" class="ai-messages">
+      <div class="ai-msg ai-msg-bot">
+        <div class="ai-bubble">
+          <p>👋 Hi Aymane! I'm your <strong>AI Campaign Copilot</strong>.</p>
+          <p>Tell me what niche or service you want to target, and I will generate the campaign configuration, high-converting subjects, and cold email pitches in English or French.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Input Area -->
+    <form id="ai-chat-form" class="ai-input-area">
+      <input type="text" id="input-ai-prompt" placeholder="Ask AI to create a service, pitch, or campaign..." autocomplete="off">
+      <button type="submit" id="btn-send-ai" class="btn-ai-send" title="Send message">
+        <i data-lucide="send"></i>
+      </button>
+    </form>
   </div>
 
   <!-- Toast Notifications -->
