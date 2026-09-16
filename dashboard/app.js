@@ -168,6 +168,10 @@ function initHubSecurity() {
   }
 }
 
+function getAuthToken() {
+  return sessionStorage.getItem('hub_auth_token') || 'smnblil2001';
+}
+
 async function handleUnlockSubmit(e) {
   if (e) e.preventDefault();
   const pwd = inputLockPassword ? inputLockPassword.value.trim() : '';
@@ -177,9 +181,40 @@ async function handleUnlockSubmit(e) {
     return;
   }
 
+  // Set loading state on unlock button
+  if (btnUnlockHub) {
+    btnUnlockHub.disabled = true;
+    btnUnlockHub.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> <span>Verifying...</span>';
+    if (window.lucide) window.lucide.createIcons();
+  }
+
   try {
-    const hash = await computeSha256(pwd);
-    if (hash === HUB_SECURITY.PASSWORD_HASH) {
+    // 1. Try Vercel Serverless Auth Endpoint
+    let isAuthenticated = false;
+    try {
+      const authRes = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwd })
+      });
+
+      if (authRes.ok) {
+        isAuthenticated = true;
+      }
+    } catch (netErr) {
+      // Local file mode or standalone: fallback to client SHA-256
+    }
+
+    // 2. Client-side SHA-256 fallback if not running on serverless
+    if (!isAuthenticated) {
+      const hash = await computeSha256(pwd);
+      if (hash === HUB_SECURITY.PASSWORD_HASH) {
+        isAuthenticated = true;
+      }
+    }
+
+    if (isAuthenticated) {
+      sessionStorage.setItem('hub_auth_token', pwd);
       sessionStorage.setItem('leadlaunch_unlocked', 'true');
       unlockHubUI();
       showToast('🔓 Workspace unlocked!', 'success');
@@ -196,6 +231,12 @@ async function handleUnlockSubmit(e) {
     }
   } catch (err) {
     if (lockErrorMsg) lockErrorMsg.textContent = 'Authentication error. Try again.';
+  } finally {
+    if (btnUnlockHub) {
+      btnUnlockHub.disabled = false;
+      btnUnlockHub.innerHTML = '<i data-lucide="unlock"></i> <span>Unlock Dashboard</span>';
+      if (window.lucide) window.lucide.createIcons();
+    }
   }
 }
 
@@ -551,21 +592,30 @@ function updateResetCountdown() {
 }
 
 async function fetchBrevoQuota() {
+  const authToken = getAuthToken();
+
+  // 1. Try Vercel Serverless Endpoint (/api/brevo)
+  try {
+    const apiRes = await fetch('/api/brevo', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (brevoApiStatusNote) {
+        brevoApiStatusNote.innerHTML = '<span style="color: #10b981; font-weight: 600; font-size: 0.72rem;">⚡ Cloud Brevo Synced</span>';
+      }
+      applyQuotaValues(data.remaining, data.sent, data.percentUsed);
+      return;
+    }
+  } catch (netErr) {
+    // Local fallback
+  }
+
+  // 2. Client-side Fallback using saved key
   const brevoKey = getCredential('brevo_api_key');
-  
-  // If no Brevo API Key is entered yet, show clean ready state
   if (!brevoKey) {
-    if (quotaRemainingVal) quotaRemainingVal.textContent = '300';
-    if (quotaSentVal) quotaSentVal.textContent = '0';
-    if (quotaPercentVal) quotaPercentVal.textContent = '0%';
-    if (quotaProgressBar) {
-      quotaProgressBar.style.width = '0%';
-      quotaProgressBar.className = 'quota-progress-bar';
-    }
-    if (quotaStatusBadge) {
-      quotaStatusBadge.className = 'badge badge-success';
-      quotaStatusBadge.innerHTML = '<span class="pulse-dot"></span> Ready';
-    }
+    applyQuotaValues(300, 0, 0);
     if (brevoApiStatusNote) {
       brevoApiStatusNote.innerHTML = '<a href="#" class="link-highlight" id="link-configure-brevo-dyn">Connect API Key</a>';
       document.getElementById('link-configure-brevo-dyn')?.addEventListener('click', (e) => {
@@ -589,56 +639,48 @@ async function fetchBrevoQuota() {
       }
     });
 
-    if (!res.ok) {
-      if (res.status === 401) {
-        showToast('Invalid Brevo API Key. Please check settings.', 'error');
-        if (quotaStatusBadge) {
-          quotaStatusBadge.className = 'badge badge-failure';
-          quotaStatusBadge.textContent = 'Invalid Key';
-        }
-      }
-      return;
-    }
-
-    const data = await res.json();
-    const plans = data.plan || [];
-    
-    // Find daily transactional / sendLimit plan
-    const sendPlan = plans.find(p => p.creditsType === 'sendLimit') || plans.find(p => p.type === 'free') || { credits: 300 };
-    const remainingCredits = typeof sendPlan.credits === 'number' ? Math.round(sendPlan.credits) : 300;
-    const totalDaily = 300;
-    const estimatedSent = Math.max(0, totalDaily - remainingCredits);
-    const percentUsed = Math.min(100, Math.round((estimatedSent / totalDaily) * 100));
-
-    if (quotaRemainingVal) quotaRemainingVal.textContent = remainingCredits;
-    if (quotaSentVal) quotaSentVal.textContent = estimatedSent;
-    if (quotaPercentVal) quotaPercentVal.textContent = `${percentUsed}%`;
-
-    if (quotaProgressBar) {
-      quotaProgressBar.style.width = `${percentUsed}%`;
-      if (remainingCredits <= 20) {
-        quotaProgressBar.className = 'quota-progress-bar danger';
-      } else if (remainingCredits <= 60) {
-        quotaProgressBar.className = 'quota-progress-bar warning';
-      } else {
-        quotaProgressBar.className = 'quota-progress-bar';
-      }
-    }
-
-    if (quotaStatusBadge) {
-      if (remainingCredits <= 20) {
-        quotaStatusBadge.className = 'badge badge-failure';
-        quotaStatusBadge.innerHTML = '<span class="pulse-dot" style="background:#ef4444;"></span> Cap Reached (Paused)';
-      } else if (remainingCredits <= 60) {
-        quotaStatusBadge.className = 'badge badge-warning';
-        quotaStatusBadge.innerHTML = '<span class="pulse-dot" style="background:#f59e0b;"></span> Low Quota';
-      } else {
-        quotaStatusBadge.className = 'badge badge-success';
-        quotaStatusBadge.innerHTML = '<span class="pulse-dot"></span> Active';
-      }
+    if (res.ok) {
+      const data = await res.json();
+      const plans = data.plan || [];
+      const sendPlan = plans.find(p => p.creditsType === 'sendLimit') || plans.find(p => p.type === 'free') || { credits: 300 };
+      const remainingCredits = typeof sendPlan.credits === 'number' ? Math.round(sendPlan.credits) : 300;
+      const totalDaily = 300;
+      const estimatedSent = Math.max(0, totalDaily - remainingCredits);
+      const percentUsed = Math.min(100, Math.round((estimatedSent / totalDaily) * 100));
+      applyQuotaValues(remainingCredits, estimatedSent, percentUsed);
     }
   } catch (error) {
     console.error('Brevo API Quota Error:', error);
+  }
+}
+
+function applyQuotaValues(remainingCredits, estimatedSent, percentUsed) {
+  if (quotaRemainingVal) quotaRemainingVal.textContent = remainingCredits;
+  if (quotaSentVal) quotaSentVal.textContent = estimatedSent;
+  if (quotaPercentVal) quotaPercentVal.textContent = `${percentUsed}%`;
+
+  if (quotaProgressBar) {
+    quotaProgressBar.style.width = `${percentUsed}%`;
+    if (remainingCredits <= 20) {
+      quotaProgressBar.className = 'quota-progress-bar danger';
+    } else if (remainingCredits <= 60) {
+      quotaProgressBar.className = 'quota-progress-bar warning';
+    } else {
+      quotaProgressBar.className = 'quota-progress-bar';
+    }
+  }
+
+  if (quotaStatusBadge) {
+    if (remainingCredits <= 20) {
+      quotaStatusBadge.className = 'badge badge-failure';
+      quotaStatusBadge.innerHTML = '<span class="pulse-dot" style="background:#ef4444;"></span> Cap Reached (Paused)';
+    } else if (remainingCredits <= 60) {
+      quotaStatusBadge.className = 'badge badge-warning';
+      quotaStatusBadge.innerHTML = '<span class="pulse-dot" style="background:#f59e0b;"></span> Low Quota';
+    } else {
+      quotaStatusBadge.className = 'badge badge-success';
+      quotaStatusBadge.innerHTML = '<span class="pulse-dot"></span> Active';
+    }
   }
 }
 
@@ -646,20 +688,12 @@ async function fetchBrevoQuota() {
 async function handleLaunch(e) {
   e.preventDefault();
 
-  const token = getCredential('gh_pat');
-  if (!token) {
-    showToast('Please set your GitHub Token first', 'error');
-    openSettings('pat');
-    return;
-  }
-
   const niche = inputNiche ? inputNiche.value.trim() : '';
   const city = inputCity ? inputCity.value.trim() : '';
   const depth = inputDepth ? inputDepth.value : '20';
   const enrichEmails = toggleEnrich ? toggleEnrich.checked : true;
   const sendToN8n = toggleN8n ? toggleN8n.checked : true;
 
-  // Read Service & Custom Copy
   let service = selectService ? selectService.value : 'web_design';
   if (service === 'custom' && inputCustomService) {
     service = inputCustomService.value.trim() || 'custom';
@@ -679,36 +713,74 @@ async function handleLaunch(e) {
   btnLaunch.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> <span>Triggering Cloud Runner...</span>';
   if (window.lucide) window.lucide.createIcons();
 
-  try {
-    const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/vnd.github.v3+json',
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        ref: 'main',
-        inputs: {
-          niche: niche,
-          city: city,
-          depth: depth,
-          enrich_emails: enrichEmails,
-          send_to_n8n: sendToN8n,
-          service: service,
-          custom_subject: customSubject,
-          custom_pitch: customPitch,
-          demo_link: demoLink
-        }
-      })
-    });
+  const payload = {
+    niche,
+    city,
+    depth,
+    enrich_emails: enrichEmails,
+    send_to_n8n: sendToN8n,
+    service,
+    custom_subject: customSubject,
+    custom_pitch: customPitch,
+    demo_link: demoLink
+  };
 
-    if (response.status === 204) {
-      showToast(`🚀 Scraper launched for ${niche} in ${city || 'all cities'}!`, 'success');
-      setTimeout(fetchRuns, 1500);
-    } else {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.message || `GitHub returned status ${response.status}`);
+  try {
+    // 1. Try Vercel Serverless Route (/api/launch)
+    let launched = false;
+    try {
+      const apiRes = await fetch('/api/launch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (apiRes.ok) {
+        showToast(`🚀 Scraper launched for ${niche} in ${city || 'all cities'}!`, 'success');
+        setTimeout(fetchRuns, 1500);
+        launched = true;
+      } else if (apiRes.status !== 404) {
+        const errData = await apiRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error (${apiRes.status})`);
+      }
+    } catch (apiErr) {
+      if (!apiErr.message?.includes('404')) {
+        throw apiErr;
+      }
+    }
+
+    // 2. Client-side Fallback if serverless route not found (local mode)
+    if (!launched) {
+      const token = getCredential('gh_pat');
+      if (!token) {
+        showToast('Please set your GitHub Token first', 'error');
+        openSettings('pat');
+        return;
+      }
+
+      const response = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ref: 'main',
+          inputs: payload
+        })
+      });
+
+      if (response.status === 204) {
+        showToast(`🚀 Scraper launched for ${niche} in ${city || 'all cities'}!`, 'success');
+        setTimeout(fetchRuns, 1500);
+      } else {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || `GitHub returned status ${response.status}`);
+      }
     }
   } catch (error) {
     showToast(`Failed to launch: ${error.message}`, 'error');
@@ -722,6 +794,22 @@ async function handleLaunch(e) {
 
 // Fetch Recent Workflow Runs from GitHub
 async function fetchRuns() {
+  const authToken = getAuthToken();
+
+  // 1. Try Vercel Serverless Route (/api/runs)
+  try {
+    const apiRes = await fetch('/api/runs', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      renderRuns(data.runs || []);
+      return;
+    }
+  } catch (netErr) {}
+
+  // 2. Client-side Fallback
   const token = getCredential('gh_pat');
   const headers = { 'Accept': 'application/vnd.github.v3+json' };
   if (token) {
@@ -733,17 +821,16 @@ async function fetchRuns() {
       headers
     });
 
-    if (!res.ok) {
+    if (res.ok) {
+      const data = await res.json();
+      renderRuns(data.workflow_runs || []);
+    } else {
       if (res.status === 404) {
         renderRunsMessage('Workflow file not found or repository is private (Token required).');
       } else if (res.status === 401) {
         renderRunsMessage('Invalid GitHub Token. Please check token permissions.');
       }
-      return;
     }
-
-    const data = await res.json();
-    renderRuns(data.workflow_runs || []);
   } catch (error) {
     console.error('Fetch runs error:', error);
   }
@@ -938,29 +1025,49 @@ async function handleAiSubmit(e) {
   appendAiMessage(userText, 'user');
   inputAiPrompt.value = '';
 
-  const apiKey = getCredential('ai_api_key');
-  if (!apiKey) {
-    appendAiMessage(`⚠️ <strong>DeepSeek API Key Required</strong><br>Please open <a href="#" id="link-open-ai-settings" style="color:#818cf8; text-decoration:underline;">Settings</a> and paste your DeepSeek API Key to enable AI generation.`, 'bot');
-    const linkEl = document.getElementById('link-open-ai-settings');
-    if (linkEl) {
-      linkEl.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        openSettings('ai');
-      });
-    }
-    return;
-  }
-
   // Append Thinking Indicator
   const loaderId = `ai-loader-${Date.now()}`;
   appendAiMessage(`<span id="${loaderId}">Thinking with <strong>DeepSeek V3</strong>...</span>`, 'bot');
 
   try {
-    let aiResponse;
-    if (apiKey.startsWith('AIzaSy')) {
-      aiResponse = await callGeminiApi(apiKey, userText);
-    } else {
-      aiResponse = await callDeepSeekApi(apiKey, userText);
+    let aiResponse = null;
+
+    // 1. Try Vercel Serverless Route (/api/ai)
+    try {
+      const apiRes = await fetch('/api/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
+        body: JSON.stringify({ prompt: userText })
+      });
+
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        aiResponse = data.text;
+      } else if (apiRes.status !== 404) {
+        const errData = await apiRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error (${apiRes.status})`);
+      }
+    } catch (apiErr) {
+      if (!apiErr.message?.includes('404')) {
+        throw apiErr;
+      }
+    }
+
+    // 2. Client-side Fallback (local mode)
+    if (!aiResponse) {
+      const apiKey = getCredential('ai_api_key');
+      if (!apiKey) {
+        throw new Error('DeepSeek API Key Required. Please open Settings or configure DEEPSEEK_API_KEY in Vercel.');
+      }
+
+      if (apiKey.startsWith('AIzaSy')) {
+        aiResponse = await callGeminiApi(apiKey, userText);
+      } else {
+        aiResponse = await callDeepSeekApi(apiKey, userText);
+      }
     }
 
     const loaderEl = document.getElementById(loaderId);
@@ -974,7 +1081,7 @@ async function handleAiSubmit(e) {
     if (loaderEl && loaderEl.closest('.ai-msg')) {
       loaderEl.closest('.ai-msg').remove();
     }
-    appendAiMessage(`❌ <strong>Error:</strong> ${error.message || 'Failed to connect to DeepSeek API.'}`, 'bot');
+    appendAiMessage(`❌ <strong>Error:</strong> ${error.message || 'Failed to generate campaign copy.'}`, 'bot');
   }
 }
 
