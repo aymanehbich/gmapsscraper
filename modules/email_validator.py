@@ -6,41 +6,69 @@ from urllib.parse import unquote
 # In-memory DNS MX cache to prevent redundant queries
 _MX_CACHE = {}
 
-# Common junk extensions and noise patterns
+# Common junk extensions and asset noise patterns
 JUNK_EXTENSIONS = (
-    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',
-    '.css', '.js', '.pdf', '.zip', '.tar', '.gz', '.woff', '.woff2', '.ttf'
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif',
+    '.css', '.js', '.pdf', '.zip', '.tar', '.gz', '.rar', '.7z', '.woff', '.woff2', '.ttf',
+    '.mp3', '.mp4', '.avi', '.mov', '.webm', '.exe', '.dmg', '.iso', '.map'
 )
 
+# Template placeholders, theme demos, and automated bot traps
 JUNK_PATTERNS = [
     'sentry', 'wixpress', 'example.com', 'domain.com', 'email.com', 'schema.org',
     'bootstrap', 'wordpress', 'fontawesome', 'react', 'jquery', 'cloudflare',
     'mysite.com', 'yourdomain', 'yourcompany', 'example@', 'test@', 'admin@example',
-    'user@domain', 'contact@yourdomain', 'info@mysite', 'username@'
+    'user@domain', 'contact@yourdomain', 'info@mysite', 'username@', 'mywebsite.com',
+    'themeforest', 'envato', 'elementor', 'webflow.io', 'squarespace.com', 'weebly.com',
+    'shopify.com', 'godaddy.com', 'johndoe', 'janedoe', 'yourname', 'firstname', 'lastname',
+    'sample@', 'lorem', 'ipsum', 'placeholder', 'nobody@', 'dummy@'
 ]
+
+# Role-based addresses that lead to bounces, spam traps, or automated rejections
+ROLE_BASED_PREFIXES = (
+    'noreply@', 'no-reply@', 'donotreply@', 'do-not-reply@', 'mailer-daemon@',
+    'postmaster@', 'abuse@', 'privacy@', 'legal@', 'security@', 'compliance@',
+    'gdpr@', 'unsubscribe@', 'auto-reply@', 'auto-response@', 'system@'
+)
 
 DISPOSABLE_DOMAINS = {
     'tempmail.com', 'mailinator.com', '10minutemail.com', 'guerrillamail.com',
     'trashmail.com', 'yopmail.com', 'sharklasers.com', 'dispostable.com',
-    'throwawaymail.com', 'temp-mail.org', 'fakeinbox.com', 'getnada.com'
+    'throwawaymail.com', 'temp-mail.org', 'fakeinbox.com', 'getnada.com',
+    'dropmail.me', 'disposablemail.com', 'inboxkitten.com', 'crazymailing.com',
+    '10mail.org', 'mytemp.email', 'tempail.com', 'burnermail.io'
 }
 
 EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', re.IGNORECASE)
 
 
-def is_clean_syntax(email: str) -> bool:
-    """Checks format, extensions, and noise patterns."""
+def sanitize_email_candidate(email: str) -> str:
+    """Strips quotes, trailing punctuation, and URL encoding."""
     if not email or not isinstance(email, str):
-        return False
-    
-    clean = unquote(email).strip().lower().lstrip('.')
-    if len(clean) > 254:
+        return ""
+    clean = unquote(email).strip().lower()
+    # Strip wrapping quotes, brackets, and trailing dots/commas
+    clean = clean.strip("\"'<>[](){}:;, \t\r\n").lstrip('.').rstrip('.')
+    return clean
+
+
+def is_clean_syntax(email: str) -> bool:
+    """Checks format, extensions, role-based traps, and noise patterns."""
+    clean = sanitize_email_candidate(email)
+    if not clean or len(clean) > 254:
         return False
 
     if not EMAIL_REGEX.match(clean):
         return False
 
+    # Prevent consecutive dots in local part or domain
+    if '..' in clean:
+        return False
+
     if any(clean.endswith(ext) for ext in JUNK_EXTENSIONS):
+        return False
+
+    if any(clean.startswith(prefix) for prefix in ROLE_BASED_PREFIXES):
         return False
 
     if any(junk in clean for junk in JUNK_PATTERNS):
@@ -52,6 +80,10 @@ def is_clean_syntax(email: str) -> bool:
 
     local_part, domain = parts[0], parts[1]
     if len(local_part) < 1 or len(domain) < 3:
+        return False
+
+    # Domain must contain at least one dot and a valid TLD
+    if '.' not in domain or domain.endswith('.'):
         return False
 
     if domain in DISPOSABLE_DOMAINS:
@@ -133,7 +165,7 @@ def verify_email(email: str, perform_smtp_check: bool = True) -> bool:
     if not is_clean_syntax(email):
         return False
 
-    clean_email = unquote(email).strip().lower().lstrip('.')
+    clean_email = sanitize_email_candidate(email)
     domain = clean_email.split('@')[1]
 
     # Layer 2: DNS MX Records
@@ -160,8 +192,8 @@ def filter_valid_emails(emails: list) -> list:
     for e in emails:
         if not e or not isinstance(e, str):
             continue
-        cleaned = unquote(e).strip().lower().lstrip('.')
-        if cleaned in seen:
+        cleaned = sanitize_email_candidate(e)
+        if not cleaned or cleaned in seen:
             continue
         if verify_email(cleaned):
             valid.append(cleaned)

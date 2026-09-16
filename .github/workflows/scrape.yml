@@ -75,6 +75,10 @@ jobs:
         run: |
           python -c "
           import json, os, glob, requests
+          try:
+              from modules.email_validator import filter_valid_emails
+          except ImportError:
+              from email_validator import filter_valid_emails
 
           lead_files = glob.glob('output/**/cleaned_leads.json', recursive=True)
           all_leads = []
@@ -89,18 +93,19 @@ jobs:
           # Filter and slim
           slim_leads = []
           for lead in all_leads:
-              emails = lead.get('emails', [])
-              if not emails and lead.get('email'):
-                  emails = [lead.get('email')]
+              raw_emails = lead.get('emails', [])
+              if not raw_emails and lead.get('email'):
+                  raw_emails = [lead.get('email')]
               
-              if not emails:
+              valid_emails = filter_valid_emails(raw_emails)
+              if not valid_emails:
                   continue
 
               slim_leads.append({
                   'cid': lead.get('cid') or lead.get('placeId') or lead.get('title'),
                   'title': lead.get('title'),
                   'category': lead.get('category') or '${{ inputs.niche }}',
-                  'emails': emails,
+                  'emails': valid_emails,
                   'website': lead.get('website'),
                   'city': lead.get('city') or '${{ inputs.city }}',
                   'state': lead.get('state'),
@@ -108,7 +113,7 @@ jobs:
                   'phone': lead.get('phone')
               })
 
-          print(f'Valid leads with emails ready for n8n: {len(slim_leads)}')
+          print(f'Valid leads with deliverable emails ready for n8n: {len(slim_leads)}')
 
           if slim_leads:
               webhook_url = 'https://aymane-hbich-n8n-c2967382a5d9.herokuapp.com/webhook/leads'
