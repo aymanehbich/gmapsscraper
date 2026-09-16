@@ -923,27 +923,26 @@ async function handleAiSubmit(e) {
       if (apiRes.ok) {
         const data = await apiRes.json();
         aiResponse = data.text;
-      } else if (apiRes.status !== 404) {
+      } else {
         const errData = await apiRes.json().catch(() => ({}));
+        if (apiRes.status === 404) {
+          throw new Error('API route /api/ai not found (404). Please ensure Vercel has deployed the api folder and redeploy.');
+        }
         throw new Error(errData.error || `Server error (${apiRes.status})`);
       }
     } catch (apiErr) {
-      if (!apiErr.message?.includes('404')) {
-        throw apiErr;
-      }
-    }
-
-    // 2. Client-side Fallback (local mode)
-    if (!aiResponse) {
-      const apiKey = getCredential('ai_api_key');
-      if (!apiKey) {
-        throw new Error('DeepSeek API Key Required. Please open Settings or configure DEEPSEEK_API_KEY in Vercel.');
-      }
-
-      if (apiKey.startsWith('AIzaSy')) {
-        aiResponse = await callGeminiApi(apiKey, userText);
+      // If local standalone file without backend serverless, try client fallback
+      if (window.location.protocol === 'file:') {
+        const apiKey = getCredential('ai_api_key');
+        if (apiKey) {
+          aiResponse = apiKey.startsWith('AIzaSy')
+            ? await callGeminiApi(apiKey, userText)
+            : await callDeepSeekApi(apiKey, userText);
+        } else {
+          throw apiErr;
+        }
       } else {
-        aiResponse = await callDeepSeekApi(apiKey, userText);
+        throw apiErr;
       }
     }
 
