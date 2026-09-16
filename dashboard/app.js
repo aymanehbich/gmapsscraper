@@ -2,23 +2,6 @@
  * LeadLaunch — Scraper & Outreach Web Dashboard Controller
  */
 
-// Master Security & Workspace Access Configuration
-const HUB_SECURITY = {
-  // SHA-256 hash of 'smnblil2001'
-  PASSWORD_HASH: 'c068aee760e260eb9cbba5eb94dce22646899af15131efa0e5df7fd82cd9b98f',
-  // Optional pre-configured fallback credentials
-  PRESET_CREDENTIALS: {
-    gh_pat: '',
-    brevo_api_key: '',
-    ai_api_key: ''
-  }
-};
-
-// Credential Resolver Helper
-function getCredential(key) {
-  return localStorage.getItem(key) || HUB_SECURITY.PRESET_CREDENTIALS[key] || '';
-}
-
 // City Presets Database
 const COUNTRY_CITY_PRESETS = {
   United_States: ['Austin', 'Miami', 'Houston', 'Los Angeles', 'Chicago', 'Atlanta', 'Dallas', 'Phoenix'],
@@ -124,14 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initHubSecurity();
 });
 
-// SHA-256 Hash Helper
-async function computeSha256(str) {
-  const buffer = new TextEncoder().encode(str);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 // Hub Security Management
 function initHubSecurity() {
   const isUnlocked = sessionStorage.getItem('leadlaunch_unlocked') === 'true';
@@ -164,7 +139,7 @@ function initHubSecurity() {
 }
 
 function getAuthToken() {
-  return sessionStorage.getItem('hub_auth_token') || 'smnblil2001';
+  return sessionStorage.getItem('hub_auth_token') || '';
 }
 
 async function handleUnlockSubmit(e) {
@@ -184,37 +159,22 @@ async function handleUnlockSubmit(e) {
   }
 
   try {
-    // 1. Try Vercel Serverless Auth Endpoint
-    let isAuthenticated = false;
-    try {
-      const authRes = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pwd })
-      });
+    const authRes = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
 
-      if (authRes.ok) {
-        isAuthenticated = true;
-      }
-    } catch (netErr) {
-      // Local file mode or standalone: fallback to client SHA-256
-    }
-
-    // 2. Client-side SHA-256 fallback if not running on serverless
-    if (!isAuthenticated) {
-      const hash = await computeSha256(pwd);
-      if (hash === HUB_SECURITY.PASSWORD_HASH) {
-        isAuthenticated = true;
-      }
-    }
-
-    if (isAuthenticated) {
+    if (authRes.ok) {
       sessionStorage.setItem('hub_auth_token', pwd);
       sessionStorage.setItem('leadlaunch_unlocked', 'true');
       unlockHubUI();
       showToast('🔓 Workspace unlocked!', 'success');
     } else {
-      if (lockErrorMsg) lockErrorMsg.textContent = 'Incorrect password. Access denied.';
+      const errData = await authRes.json().catch(() => ({}));
+      if (lockErrorMsg) {
+        lockErrorMsg.textContent = errData.error || 'Incorrect password. Access denied.';
+      }
       if (lockCard) {
         lockCard.classList.remove('shake');
         void lockCard.offsetWidth; // Force reflow
@@ -225,7 +185,7 @@ async function handleUnlockSubmit(e) {
       }
     }
   } catch (err) {
-    if (lockErrorMsg) lockErrorMsg.textContent = 'Authentication error. Try again.';
+    if (lockErrorMsg) lockErrorMsg.textContent = 'Serverless auth error. Please verify backend deployment.';
   } finally {
     if (btnUnlockHub) {
       btnUnlockHub.disabled = false;

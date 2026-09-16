@@ -21,9 +21,16 @@ module.exports = async (req, res) => {
   }
 
   const { password } = req.body || {};
-  const masterPassword = process.env.HUB_PASSWORD || 'smnblil2001';
+  const masterPassword = process.env.HUB_PASSWORD;
 
-  if (!password || password.trim() !== masterPassword) {
+  if (!masterPassword) {
+    return res.status(500).json({
+      success: false,
+      error: 'HUB_PASSWORD environment variable is not configured in Vercel settings.'
+    });
+  }
+
+  if (!password || password.trim() !== masterPassword.trim()) {
     return res.status(401).json({ success: false, error: 'Invalid workspace password' });
   }
 
