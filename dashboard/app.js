@@ -856,13 +856,53 @@ function appendAiMessage(htmlContent, sender = 'bot') {
 }
 
 async function callGeminiApi(apiKey, userPrompt) {
+  const cleanKey = apiKey.trim();
+
+  // 1. Dynamically query ModelService to get exact authorized models for this key
+  let availableModels = [];
+
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`);
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      if (listData.models && Array.isArray(listData.models)) {
+        availableModels = listData.models
+          .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+          .map(m => m.name.replace(/^models\//, ''));
+      }
+    }
+  } catch (e) {
+    console.warn('Model discovery v1beta error:', e);
+  }
+
+  if (availableModels.length === 0) {
+    try {
+      const listV1Res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${cleanKey}`);
+      if (listV1Res.ok) {
+        const listV1Data = await listV1Res.json();
+        if (listV1Data.models && Array.isArray(listV1Data.models)) {
+          availableModels = listV1Data.models
+            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+            .map(m => m.name.replace(/^models\//, ''));
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Priority order: discovered models first, then common names
   const candidateModels = [
+    ...availableModels,
+    'gemini-1.5-flash',
     'gemini-1.5-flash-latest',
     'gemini-2.0-flash',
-    'gemini-1.5-flash',
     'gemini-2.0-flash-exp',
-    'gemini-1.5-pro'
+    'gemini-1.5-flash-001',
+    'gemini-1.5-flash-002',
+    'gemini-1.5-pro',
+    'gemini-pro'
   ];
+
+  const uniqueModels = [...new Set(candidateModels)];
 
   const payload = {
     contents: [
@@ -875,37 +915,42 @@ async function callGeminiApi(apiKey, userPrompt) {
 
   let lastError = null;
 
-  for (const model of candidateModels) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+  for (const model of uniqueModels) {
+    for (const apiVer of ['v1beta', 'v1']) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${cleanKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        // If 404 model not found, try next candidate
-        if (response.status === 404 || errData.error?.message?.includes('not found')) {
-          lastError = new Error(errData.error?.message || `Model ${model} not available`);
-          continue;
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = errData.error?.message || `Status ${response.status}`;
+          if (response.status === 404 || errMsg.includes('not found') || errMsg.includes('not supported')) {
+            lastError = new Error(errMsg);
+            continue;
+          }
+          // If auth or quota error (400/403/429), throw immediately for clear user visibility
+          throw new Error(errMsg);
         }
-        throw new Error(errData.error?.message || `Gemini API error (${response.status})`);
-      }
 
-      const result = await response.json();
-      const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (text) return text;
-    } catch (err) {
-      lastError = err;
-      if (!err.message?.includes('not found') && !err.message?.includes('404')) {
-        throw err;
+        const result = await response.json();
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        if (text) {
+          return text;
+        }
+      } catch (err) {
+        lastError = err;
+        if (!err.message?.includes('not found') && !err.message?.includes('404') && !err.message?.includes('not supported')) {
+          throw err;
+        }
       }
     }
   }
 
-  throw lastError || new Error('Could not connect to any Gemini model. Please verify your API key in Google AI Studio.');
+  throw lastError || new Error('No supported Gemini model found for this key. Please make sure Generative Language API is enabled in Google AI Studio.');
 }
 
 function renderAiBotResponse(responseText) {
