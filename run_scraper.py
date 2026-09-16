@@ -136,10 +136,14 @@ def run_scraper():
             abspath_queries = os.path.abspath(temp_queries_file)
             abspath_out = os.path.abspath(dir_path)
 
+            try:
+                os.chmod(dir_path, 0o777)
+            except Exception:
+                pass
+
             # Build Docker command
             docker_cmd = [
                 "docker", "run", "--rm",
-                "-v", "gmaps-playwright-cache:/opt",
                 "-v", f"{abspath_queries}:/queries.txt:ro",
                 "-v", f"{abspath_out}:/out",
             ]
@@ -156,7 +160,6 @@ def run_scraper():
                 "-input", "/queries.txt",
                 "-results", "/out/raw_results.json",
                 "-json",
-                "-extra-reviews",
                 "-depth", str(args.depth),
                 "-exit-on-inactivity", args.exit_on_inactivity,
                 "-c", str(args.concurrency)
@@ -177,7 +180,6 @@ def run_scraper():
                 result = subprocess.run(docker_cmd, check=True)
             except subprocess.CalledProcessError as e:
                 print(f"--> ERROR: Docker scraper run failed for {city}, {country}. Error: {e}")
-                # Keep temporary query file for debugging, move to next city
                 continue
 
             # Process and clean output
