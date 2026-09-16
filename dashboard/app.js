@@ -25,7 +25,7 @@ let inputPat, btnSavePat, btnSettingsToggle, btnCloseSettings, settingsPanel, pa
 let scrapeForm, inputNiche, selectCountry, inputCity, inputDepth, depthVal, toggleEnrich, toggleN8n, btnLaunch;
 let nicheChips, cityChips, runsContainer, btnRefreshRuns, toastContainer;
 let selectService, inputCustomService, btnToggleCopy, copyPanel, inputCustomSubject, inputCustomPitch, inputDemoLink;
-let selectAiProvider, inputAiKey, inputOpenrouterModel, openrouterModelGroup, btnToggleAiView, btnToggleAi, aiChatDrawer, btnCloseAi, btnClearAi, aiMessages, aiChatForm, inputAiPrompt;
+let inputAiKey, btnToggleAiView, btnToggleAi, aiChatDrawer, btnCloseAi, btnClearAi, aiMessages, aiChatForm, inputAiPrompt;
 
 // Brevo Elements
 let inputBrevoKey, btnToggleBrevoView, btnRefreshQuota, quotaStatusBadge;
@@ -61,10 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
   inputCustomPitch = document.getElementById('input-custom-pitch');
   inputDemoLink = document.getElementById('input-demo-link');
 
-  selectAiProvider = document.getElementById('select-ai-provider');
   inputAiKey = document.getElementById('input-ai-key');
-  inputOpenrouterModel = document.getElementById('input-openrouter-model');
-  openrouterModelGroup = document.getElementById('openrouter-model-group');
   btnToggleAiView = document.getElementById('btn-toggle-ai-view');
   btnToggleAi = document.getElementById('btn-toggle-ai');
   aiChatDrawer = document.getElementById('ai-chat-drawer');
@@ -191,21 +188,12 @@ function setupEventListeners() {
         localStorage.removeItem('brevo_api_key');
       }
 
-      // Save AI Settings
+      // Save Gemini Key
       const aiVal = inputAiKey ? inputAiKey.value.trim() : '';
       if (aiVal) {
         localStorage.setItem('ai_api_key', aiVal);
       } else {
         localStorage.removeItem('ai_api_key');
-      }
-
-      if (selectAiProvider) {
-        localStorage.setItem('ai_provider', selectAiProvider.value);
-      }
-
-      if (inputOpenrouterModel) {
-        const modelVal = inputOpenrouterModel.value.trim() || 'deepseek/deepseek-chat';
-        localStorage.setItem('openrouter_model', modelVal);
       }
 
       showToast('Settings saved successfully!', 'success');
@@ -757,39 +745,6 @@ function initAiAssistant() {
     inputAiKey.value = storedAiKey;
   }
 
-  const storedProvider = localStorage.getItem('ai_provider') || 'openrouter';
-  if (selectAiProvider) {
-    selectAiProvider.value = storedProvider;
-  }
-
-  const storedModel = localStorage.getItem('openrouter_model') || 'deepseek/deepseek-chat';
-  if (inputOpenrouterModel) {
-    inputOpenrouterModel.value = storedModel;
-  }
-
-  function updateModelVisibility() {
-    if (!openrouterModelGroup || !selectAiProvider) return;
-    openrouterModelGroup.style.display = selectAiProvider.value === 'openrouter' ? 'block' : 'none';
-  }
-
-  if (selectAiProvider) {
-    selectAiProvider.addEventListener('change', updateModelVisibility);
-    updateModelVisibility();
-  }
-
-  if (inputAiKey) {
-    inputAiKey.addEventListener('input', () => {
-      const val = inputAiKey.value.trim();
-      if (val.startsWith('sk-or-') && selectAiProvider) {
-        selectAiProvider.value = 'openrouter';
-        updateModelVisibility();
-      } else if (val.startsWith('AIzaSy') && selectAiProvider) {
-        selectAiProvider.value = 'gemini';
-        updateModelVisibility();
-      }
-    });
-  }
-
   if (btnToggleAiView && inputAiKey) {
     btnToggleAiView.addEventListener('click', () => {
       const isPwd = inputAiKey.type === 'password';
@@ -857,7 +812,7 @@ async function handleAiSubmit(e) {
 
   const apiKey = localStorage.getItem('ai_api_key');
   if (!apiKey) {
-    appendAiMessage(`⚠️ <strong>AI API Key Required</strong><br>Please open <a href="#" id="link-open-ai-settings" style="color:#818cf8; text-decoration:underline;">Settings</a> and paste your OpenRouter API Key (or Gemini key) to enable AI generation.`, 'bot');
+    appendAiMessage(`⚠️ <strong>Gemini API Key Required</strong><br>Please open <a href="#" id="link-open-ai-settings" style="color:#818cf8; text-decoration:underline;">Settings</a> and paste your free Google Gemini API Key to enable AI generation.`, 'bot');
     const linkEl = document.getElementById('link-open-ai-settings');
     if (linkEl) {
       linkEl.addEventListener('click', (ev) => {
@@ -868,28 +823,12 @@ async function handleAiSubmit(e) {
     return;
   }
 
-  // Smart Provider Detection
-  let provider = localStorage.getItem('ai_provider') || 'openrouter';
-  if (apiKey.startsWith('sk-or-') || apiKey.startsWith('sk-')) {
-    provider = 'openrouter';
-  } else if (apiKey.startsWith('AIzaSy')) {
-    provider = 'gemini';
-  }
-
-  const model = localStorage.getItem('openrouter_model') || 'deepseek/deepseek-chat';
-
   // Append Thinking Indicator
   const loaderId = `ai-loader-${Date.now()}`;
-  const modelLabel = provider === 'openrouter' ? (model.split('/')[1] || model) : 'Gemini';
-  appendAiMessage(`<span id="${loaderId}">Thinking with <strong>${modelLabel}</strong>...</span>`, 'bot');
+  appendAiMessage(`<span id="${loaderId}">Thinking with <strong>Gemini AI</strong>...</span>`, 'bot');
 
   try {
-    let aiResponse;
-    if (provider === 'gemini') {
-      aiResponse = await callGeminiApi(apiKey, userText);
-    } else {
-      aiResponse = await callOpenRouterApi(apiKey, model, userText);
-    }
+    const aiResponse = await callGeminiApi(apiKey, userText);
 
     const loaderEl = document.getElementById(loaderId);
     if (loaderEl && loaderEl.closest('.ai-msg')) {
@@ -902,7 +841,7 @@ async function handleAiSubmit(e) {
     if (loaderEl && loaderEl.closest('.ai-msg')) {
       loaderEl.closest('.ai-msg').remove();
     }
-    appendAiMessage(`❌ <strong>Error:</strong> ${error.message || 'Failed to connect to AI API.'}`, 'bot');
+    appendAiMessage(`❌ <strong>Error:</strong> ${error.message || 'Failed to connect to Gemini API.'}`, 'bot');
   }
 }
 
@@ -916,46 +855,15 @@ function appendAiMessage(htmlContent, sender = 'bot') {
   if (window.lucide) window.lucide.createIcons();
 }
 
-async function callOpenRouterApi(apiKey, model, userPrompt) {
-  const url = 'https://openrouter.ai/api/v1/chat/completions';
-  const targetModel = model && model.trim() ? model.trim() : 'deepseek/deepseek-chat';
-
-  const payload = {
-    model: targetModel,
-    messages: [
-      { role: 'system', content: SYSTEM_AI_INSTRUCTION },
-      { role: 'user', content: userPrompt }
-    ],
-    temperature: 0.7
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey.trim()}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://aymanehbich.com',
-      'X-Title': 'LeadLaunch AI Outreach Copilot'
-    },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || err.message || `OpenRouter API error (${response.status})`);
-  }
-
-  const result = await response.json();
-  const text = result.choices?.[0]?.message?.content || '';
-  if (!text) {
-    throw new Error('OpenRouter returned an empty response. Please check model or credits.');
-  }
-  return text;
-}
-
 async function callGeminiApi(apiKey, userPrompt) {
-  // Use gemini-1.5-flash-latest or gemini-2.0-flash
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey.trim()}`;
+  const candidateModels = [
+    'gemini-1.5-flash-latest',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-pro'
+  ];
+
   const payload = {
     contents: [
       {
@@ -965,20 +873,39 @@ async function callGeminiApi(apiKey, userPrompt) {
     ]
   };
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
+  let lastError = null;
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `Gemini API error (${response.status})`);
+  for (const model of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        // If 404 model not found, try next candidate
+        if (response.status === 404 || errData.error?.message?.includes('not found')) {
+          lastError = new Error(errData.error?.message || `Model ${model} not available`);
+          continue;
+        }
+        throw new Error(errData.error?.message || `Gemini API error (${response.status})`);
+      }
+
+      const result = await response.json();
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (text) return text;
+    } catch (err) {
+      lastError = err;
+      if (!err.message?.includes('not found') && !err.message?.includes('404')) {
+        throw err;
+      }
+    }
   }
 
-  const result = await response.json();
-  const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  return text;
+  throw lastError || new Error('Could not connect to any Gemini model. Please verify your API key in Google AI Studio.');
 }
 
 function renderAiBotResponse(responseText) {
