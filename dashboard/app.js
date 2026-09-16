@@ -812,7 +812,7 @@ async function handleAiSubmit(e) {
 
   const apiKey = localStorage.getItem('ai_api_key');
   if (!apiKey) {
-    appendAiMessage(`⚠️ <strong>Gemini API Key Required</strong><br>Please open <a href="#" id="link-open-ai-settings" style="color:#818cf8; text-decoration:underline;">Settings</a> and paste your free Google Gemini API Key to enable AI generation.`, 'bot');
+    appendAiMessage(`⚠️ <strong>DeepSeek API Key Required</strong><br>Please open <a href="#" id="link-open-ai-settings" style="color:#818cf8; text-decoration:underline;">Settings</a> and paste your DeepSeek API Key to enable AI generation.`, 'bot');
     const linkEl = document.getElementById('link-open-ai-settings');
     if (linkEl) {
       linkEl.addEventListener('click', (ev) => {
@@ -825,10 +825,15 @@ async function handleAiSubmit(e) {
 
   // Append Thinking Indicator
   const loaderId = `ai-loader-${Date.now()}`;
-  appendAiMessage(`<span id="${loaderId}">Thinking with <strong>Gemini AI</strong>...</span>`, 'bot');
+  appendAiMessage(`<span id="${loaderId}">Thinking with <strong>DeepSeek V3</strong>...</span>`, 'bot');
 
   try {
-    const aiResponse = await callGeminiApi(apiKey, userText);
+    let aiResponse;
+    if (apiKey.startsWith('AIzaSy')) {
+      aiResponse = await callGeminiApi(apiKey, userText);
+    } else {
+      aiResponse = await callDeepSeekApi(apiKey, userText);
+    }
 
     const loaderEl = document.getElementById(loaderId);
     if (loaderEl && loaderEl.closest('.ai-msg')) {
@@ -841,7 +846,7 @@ async function handleAiSubmit(e) {
     if (loaderEl && loaderEl.closest('.ai-msg')) {
       loaderEl.closest('.ai-msg').remove();
     }
-    appendAiMessage(`❌ <strong>Error:</strong> ${error.message || 'Failed to connect to Gemini API.'}`, 'bot');
+    appendAiMessage(`❌ <strong>Error:</strong> ${error.message || 'Failed to connect to DeepSeek API.'}`, 'bot');
   }
 }
 
@@ -855,10 +860,44 @@ function appendAiMessage(htmlContent, sender = 'bot') {
   if (window.lucide) window.lucide.createIcons();
 }
 
+async function callDeepSeekApi(apiKey, userPrompt) {
+  const url = 'https://api.deepseek.com/chat/completions';
+
+  const payload = {
+    model: 'deepseek-chat',
+    messages: [
+      { role: 'system', content: SYSTEM_AI_INSTRUCTION },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.7
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey.trim()}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || err.message || `DeepSeek API error (${response.status})`);
+  }
+
+  const result = await response.json();
+  const text = result.choices?.[0]?.message?.content || '';
+  if (!text) {
+    throw new Error('DeepSeek returned an empty response.');
+  }
+  return text;
+}
+
 async function callGeminiApi(apiKey, userPrompt) {
   const cleanKey = apiKey.trim();
 
-  // 1. Dynamically query ModelService to get exact authorized models for this key
+  // Dynamically query ModelService to get exact authorized models for this key
   let availableModels = [];
 
   try {
@@ -871,35 +910,14 @@ async function callGeminiApi(apiKey, userPrompt) {
           .map(m => m.name.replace(/^models\//, ''));
       }
     }
-  } catch (e) {
-    console.warn('Model discovery v1beta error:', e);
-  }
+  } catch (e) {}
 
-  if (availableModels.length === 0) {
-    try {
-      const listV1Res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${cleanKey}`);
-      if (listV1Res.ok) {
-        const listV1Data = await listV1Res.json();
-        if (listV1Data.models && Array.isArray(listV1Data.models)) {
-          availableModels = listV1Data.models
-            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
-            .map(m => m.name.replace(/^models\//, ''));
-        }
-      }
-    } catch (e) {}
-  }
-
-  // Priority order: discovered models first, then common names
   const candidateModels = [
     ...availableModels,
     'gemini-1.5-flash',
     'gemini-1.5-flash-latest',
     'gemini-2.0-flash',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash-001',
-    'gemini-1.5-flash-002',
-    'gemini-1.5-pro',
-    'gemini-pro'
+    'gemini-1.5-pro'
   ];
 
   const uniqueModels = [...new Set(candidateModels)];
@@ -932,15 +950,12 @@ async function callGeminiApi(apiKey, userPrompt) {
             lastError = new Error(errMsg);
             continue;
           }
-          // If auth or quota error (400/403/429), throw immediately for clear user visibility
           throw new Error(errMsg);
         }
 
         const result = await response.json();
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        if (text) {
-          return text;
-        }
+        if (text) return text;
       } catch (err) {
         lastError = err;
         if (!err.message?.includes('not found') && !err.message?.includes('404') && !err.message?.includes('not supported')) {
@@ -950,7 +965,7 @@ async function callGeminiApi(apiKey, userPrompt) {
     }
   }
 
-  throw lastError || new Error('No supported Gemini model found for this key. Please make sure Generative Language API is enabled in Google AI Studio.');
+  throw lastError || new Error('No supported Gemini model found for this key.');
 }
 
 function renderAiBotResponse(responseText) {
