@@ -109,7 +109,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Hub Security Management
 function initHubSecurity() {
-  const isUnlocked = sessionStorage.getItem('leadlaunch_unlocked') === 'true';
+  const authToken = sessionStorage.getItem('hub_auth_token');
+  const isUnlocked = sessionStorage.getItem('leadlaunch_unlocked') === 'true' && !!authToken;
+
+  if (!authToken) {
+    sessionStorage.removeItem('leadlaunch_unlocked');
+  }
 
   // Toggle Password Mask
   if (btnToggleLockPwd && inputLockPassword) {
@@ -216,6 +221,7 @@ function unlockHubUI() {
 
 function lockHub() {
   sessionStorage.removeItem('leadlaunch_unlocked');
+  sessionStorage.removeItem('hub_auth_token');
   lockHubUI();
   showToast('🔒 Workspace locked', 'info');
 }
@@ -641,12 +647,21 @@ async function handleLaunch(e) {
         showToast(`🚀 Scraper launched for ${niche} in ${city || 'all cities'}!`, 'success');
         setTimeout(fetchRuns, 1500);
         launched = true;
-      } else if (apiRes.status !== 404) {
+      } else {
         const errData = await apiRes.json().catch(() => ({}));
+        if (apiRes.status === 401) {
+          lockHub();
+          throw new Error('Unauthorized or session expired. Please re-enter your workspace password to unlock.');
+        }
+        if (apiRes.status === 404) {
+          throw new Error('API route /api/launch not found (404). Please ensure Vercel has deployed the api folder.');
+        }
         throw new Error(errData.error || `Server error (${apiRes.status})`);
       }
     } catch (apiErr) {
-      if (!apiErr.message?.includes('404')) {
+      if (window.location.protocol === 'file:') {
+        // standalone local file fallback
+      } else {
         throw apiErr;
       }
     }
