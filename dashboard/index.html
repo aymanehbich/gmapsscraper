@@ -12,6 +12,30 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
+  <!-- Hub Password Lock Screen Overlay -->
+  <div id="lock-screen-overlay" class="lock-screen-overlay">
+    <div class="lock-card" id="lock-card">
+      <div class="lock-icon-wrap">
+        <i data-lucide="shield-check"></i>
+      </div>
+      <h2>LeadLaunch Hub</h2>
+      <p>This workspace is password protected. Enter the access key to unlock your scraping & outreach pipelines.</p>
+      <form id="lock-form" class="lock-form">
+        <div class="lock-input-wrap">
+          <input type="password" id="input-lock-password" placeholder="Enter password..." autocomplete="current-password" autofocus required>
+          <button type="button" id="btn-toggle-lock-pwd" class="btn-icon" aria-label="Toggle visibility">
+            <i data-lucide="eye"></i>
+          </button>
+        </div>
+        <div id="lock-error-msg" class="lock-error-msg"></div>
+        <button type="submit" id="btn-unlock-hub" class="btn-unlock">
+          <i data-lucide="unlock"></i>
+          <span>Unlock Dashboard</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <div class="app-wrapper">
     <!-- Clean Minimalist Header -->
     <header class="navbar">
@@ -33,8 +57,13 @@
 
         <button id="btn-settings-toggle" class="btn btn-secondary" title="GitHub Configuration">
           <i data-lucide="key"></i>
-          <span>GitHub Token</span>
+          <span>Credentials</span>
           <span id="pat-status-dot" class="status-dot dot-offline"></span>
+        </button>
+
+        <button id="btn-lock-hub" class="btn btn-ghost" title="Lock Hub">
+          <i data-lucide="lock"></i>
+          <span>Lock</span>
         </button>
 
         <a href="https://github.com/aymanehbich/gmapsscraper/actions" target="_blank" rel="noopener" class="btn btn-ghost">

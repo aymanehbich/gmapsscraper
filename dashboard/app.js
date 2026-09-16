@@ -2,6 +2,23 @@
  * LeadLaunch — Scraper & Outreach Web Dashboard Controller
  */
 
+// Master Security & Workspace Access Configuration
+const HUB_SECURITY = {
+  // SHA-256 hash of 'smnblil2001'
+  PASSWORD_HASH: 'c068aee760e260eb9cbba5eb94dce22646899af15131efa0e5df7fd82cd9b98f',
+  // Optional pre-configured fallback credentials
+  PRESET_CREDENTIALS: {
+    gh_pat: '',
+    brevo_api_key: '',
+    ai_api_key: ''
+  }
+};
+
+// Credential Resolver Helper
+function getCredential(key) {
+  return localStorage.getItem(key) || HUB_SECURITY.PRESET_CREDENTIALS[key] || '';
+}
+
 // City Presets Database
 const COUNTRY_CITY_PRESETS = {
   United_States: ['Austin', 'Miami', 'Houston', 'Los Angeles', 'Chicago', 'Atlanta', 'Dallas', 'Phoenix'],
@@ -20,7 +37,10 @@ const WORKFLOW_FILE = 'scrape.yml';
 // State
 let pollInterval = null;
 
-// DOM Elements
+// Lock Screen DOM Elements
+let lockScreenOverlay, lockCard, lockForm, inputLockPassword, btnToggleLockPwd, lockErrorMsg, btnUnlockHub, btnLockHub;
+
+// Main DOM Elements
 let inputPat, btnSavePat, btnSettingsToggle, btnCloseSettings, settingsPanel, patStatusDot, btnTogglePatView;
 let scrapeForm, inputNiche, selectCountry, inputCity, inputDepth, depthVal, toggleEnrich, toggleN8n, btnLaunch;
 let nicheChips, cityChips, runsContainer, btnRefreshRuns, toastContainer;
@@ -34,7 +54,17 @@ let quotaResetCountdown, brevoApiStatusNote, linkConfigureBrevo;
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
-  // Grab Elements
+  // Lock Elements
+  lockScreenOverlay = document.getElementById('lock-screen-overlay');
+  lockCard = document.getElementById('lock-card');
+  lockForm = document.getElementById('lock-form');
+  inputLockPassword = document.getElementById('input-lock-password');
+  btnToggleLockPwd = document.getElementById('btn-toggle-lock-pwd');
+  lockErrorMsg = document.getElementById('lock-error-msg');
+  btnUnlockHub = document.getElementById('btn-unlock-hub');
+  btnLockHub = document.getElementById('btn-lock-hub');
+
+  // Main UI Elements
   inputPat = document.getElementById('input-pat');
   btnSavePat = document.getElementById('btn-save-pat');
   btnSettingsToggle = document.getElementById('btn-settings-toggle');
@@ -95,21 +125,120 @@ document.addEventListener('DOMContentLoaded', () => {
     window.lucide.createIcons();
   }
 
+  setupEventListeners();
+  initHubSecurity();
+});
+
+// SHA-256 Hash Helper
+async function computeSha256(str) {
+  const buffer = new TextEncoder().encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Hub Security Management
+function initHubSecurity() {
+  const isUnlocked = sessionStorage.getItem('leadlaunch_unlocked') === 'true';
+
+  // Toggle Password Mask
+  if (btnToggleLockPwd && inputLockPassword) {
+    btnToggleLockPwd.addEventListener('click', () => {
+      const isPwd = inputLockPassword.type === 'password';
+      inputLockPassword.type = isPwd ? 'text' : 'password';
+      const icon = btnToggleLockPwd.querySelector('svg');
+      if (icon) icon.style.opacity = isPwd ? '1' : '0.5';
+    });
+  }
+
+  // Lock Form Submit Handler
+  if (lockForm) {
+    lockForm.addEventListener('submit', handleUnlockSubmit);
+  }
+
+  // Navbar Lock Button
+  if (btnLockHub) {
+    btnLockHub.addEventListener('click', lockHub);
+  }
+
+  if (isUnlocked) {
+    unlockHubUI();
+  } else {
+    lockHubUI();
+  }
+}
+
+async function handleUnlockSubmit(e) {
+  if (e) e.preventDefault();
+  const pwd = inputLockPassword ? inputLockPassword.value.trim() : '';
+
+  if (!pwd) {
+    if (lockErrorMsg) lockErrorMsg.textContent = 'Please enter workspace password';
+    return;
+  }
+
+  try {
+    const hash = await computeSha256(pwd);
+    if (hash === HUB_SECURITY.PASSWORD_HASH) {
+      sessionStorage.setItem('leadlaunch_unlocked', 'true');
+      unlockHubUI();
+      showToast('🔓 Workspace unlocked!', 'success');
+    } else {
+      if (lockErrorMsg) lockErrorMsg.textContent = 'Incorrect password. Access denied.';
+      if (lockCard) {
+        lockCard.classList.remove('shake');
+        void lockCard.offsetWidth; // Force reflow
+        lockCard.classList.add('shake');
+      }
+      if (inputLockPassword) {
+        inputLockPassword.select();
+      }
+    }
+  } catch (err) {
+    if (lockErrorMsg) lockErrorMsg.textContent = 'Authentication error. Try again.';
+  }
+}
+
+function unlockHubUI() {
+  if (lockScreenOverlay) {
+    lockScreenOverlay.classList.add('hidden');
+  }
   loadStoredPat();
   loadStoredBrevoKey();
   updateCityChips(selectCountry ? selectCountry.value : 'United_States');
-  setupEventListeners();
   initBrevoIntegration();
   initAiAssistant();
   fetchRuns();
   pingN8nWebhook();
 
-  // Auto-poll runs and n8n status every 12 seconds
-  pollInterval = setInterval(() => {
-    fetchRuns();
-    pingN8nWebhook();
-  }, 12000);
-});
+  if (!pollInterval) {
+    pollInterval = setInterval(() => {
+      if (sessionStorage.getItem('leadlaunch_unlocked') === 'true') {
+        fetchRuns();
+        pingN8nWebhook();
+      }
+    }, 12000);
+  }
+}
+
+function lockHub() {
+  sessionStorage.removeItem('leadlaunch_unlocked');
+  lockHubUI();
+  showToast('🔒 Workspace locked', 'info');
+}
+
+function lockHubUI() {
+  if (lockScreenOverlay) {
+    lockScreenOverlay.classList.remove('hidden');
+  }
+  if (inputLockPassword) {
+    inputLockPassword.value = '';
+    setTimeout(() => inputLockPassword.focus(), 150);
+  }
+  if (lockErrorMsg) {
+    lockErrorMsg.textContent = '';
+  }
+}
 
 async function pingN8nWebhook() {
   const n8nPill = document.getElementById('n8n-live-pill');
@@ -350,17 +479,15 @@ function updateCityChips(country) {
 
 // PAT Storage Helpers
 function loadStoredPat() {
-  const stored = localStorage.getItem('gh_pat');
-  if (stored && inputPat) {
+  const stored = getCredential('gh_pat');
+  if (inputPat) {
     inputPat.value = stored;
-    updatePatStatus(true);
-  } else {
-    updatePatStatus(false);
   }
+  updatePatStatus(Boolean(stored));
 }
 
 function loadStoredBrevoKey() {
-  const storedBrevo = localStorage.getItem('brevo_api_key');
+  const storedBrevo = getCredential('brevo_api_key');
   if (storedBrevo && inputBrevoKey) {
     inputBrevoKey.value = storedBrevo;
   }
@@ -424,7 +551,7 @@ function updateResetCountdown() {
 }
 
 async function fetchBrevoQuota() {
-  const brevoKey = localStorage.getItem('brevo_api_key');
+  const brevoKey = getCredential('brevo_api_key');
   
   // If no Brevo API Key is entered yet, show clean ready state
   if (!brevoKey) {
@@ -519,7 +646,7 @@ async function fetchBrevoQuota() {
 async function handleLaunch(e) {
   e.preventDefault();
 
-  const token = localStorage.getItem('gh_pat');
+  const token = getCredential('gh_pat');
   if (!token) {
     showToast('Please set your GitHub Token first', 'error');
     openSettings('pat');
@@ -595,7 +722,7 @@ async function handleLaunch(e) {
 
 // Fetch Recent Workflow Runs from GitHub
 async function fetchRuns() {
-  const token = localStorage.getItem('gh_pat');
+  const token = getCredential('gh_pat');
   const headers = { 'Accept': 'application/vnd.github.v3+json' };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -741,7 +868,7 @@ IMPORTANT: At the end of your response, output a JSON block wrapped in \`\`\`jso
 \`\`\``;
 
 function initAiAssistant() {
-  const storedAiKey = localStorage.getItem('ai_api_key');
+  const storedAiKey = getCredential('ai_api_key');
   if (storedAiKey && inputAiKey) {
     inputAiKey.value = storedAiKey;
   }
@@ -811,7 +938,7 @@ async function handleAiSubmit(e) {
   appendAiMessage(userText, 'user');
   inputAiPrompt.value = '';
 
-  const apiKey = localStorage.getItem('ai_api_key');
+  const apiKey = getCredential('ai_api_key');
   if (!apiKey) {
     appendAiMessage(`⚠️ <strong>DeepSeek API Key Required</strong><br>Please open <a href="#" id="link-open-ai-settings" style="color:#818cf8; text-decoration:underline;">Settings</a> and paste your DeepSeek API Key to enable AI generation.`, 'bot');
     const linkEl = document.getElementById('link-open-ai-settings');
