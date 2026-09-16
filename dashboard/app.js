@@ -722,17 +722,18 @@ function showToast(message, type = 'info') {
 // ==========================================================================
 
 const SYSTEM_AI_INSTRUCTION = `You are the LeadLaunch AI Outreach Copilot for Aymane. You generate cold email pitches, subject lines, and campaign setups for B2B local business outreach (Plumbers, Electricians, Dentists, Roofers, etc.) in English or French.
-When the user asks for a pitch, campaign, or service, craft a compelling, concise 2-sentence pitch with natural variables (like {{title}}, {{city}}, {{category}}, {{demoLink}}).
+When the user asks for a pitch, campaign, or service (e.g. Local SEO, Google Review Automation, Website Redesign, Emergency Booking, etc.), craft a compelling, concise 2-sentence pitch with natural variables (like {{title}}, {{city}}, {{category}}, {{demoLink}}).
 IMPORTANT: At the end of your response, output a JSON block wrapped in \`\`\`json containing the campaign parameters so the user can apply it in 1 click:
 \`\`\`json
 {
   "campaignConfig": {
-    "niche": "Target Niche",
+    "niche": "Target Niche (e.g. Plumber, Dentist, Electrician)",
     "country": "United_States or France or Morocco or United_Kingdom",
     "city": "City name",
-    "service": "web_design or custom key",
-    "custom_subject": "Subject with {{title}} and {{city}}",
-    "custom_pitch": "Punchy 2-sentence pitch",
+    "service": "web_design or custom",
+    "custom_service": "Descriptive Service Name (e.g. Local SEO & Maps Top 3, Automated 5-Star Reviews, 24/7 Booking Portal)",
+    "custom_subject": "High converting subject line with {{title}} and {{city}}",
+    "custom_pitch": "Punchy 2-sentence pitch with {{category}} and {{city}}",
     "demo_link": "https://demo.aymanehbich.com/showcase",
     "depth": 20
   }
@@ -995,10 +996,12 @@ function renderAiBotResponse(responseText) {
   
   let actionCardHtml = '';
   if (campaignData) {
+    const serviceDisplay = campaignData.custom_service || (campaignData.service === 'web_design' ? 'Website Redesign & Creation' : (campaignData.service || 'Custom Service'));
     actionCardHtml = `
       <div class="ai-campaign-card">
         <div class="ai-campaign-row"><span class="ai-campaign-label">Niche:</span><span class="ai-campaign-val">${campaignData.niche || 'N/A'}</span></div>
         <div class="ai-campaign-row"><span class="ai-campaign-label">Location:</span><span class="ai-campaign-val">${campaignData.city || 'All'} (${campaignData.country || 'USA'})</span></div>
+        <div class="ai-campaign-row"><span class="ai-campaign-label">Service:</span><span class="ai-campaign-val">${serviceDisplay}</span></div>
         <div class="ai-campaign-row"><span class="ai-campaign-label">Subject:</span><span class="ai-campaign-val">${campaignData.custom_subject || 'Default'}</span></div>
         <button type="button" class="btn-apply-campaign" data-config='${JSON.stringify(campaignData).replace(/'/g, "&apos;")}'>
           <i data-lucide="zap"></i> Apply to Campaign Launcher
@@ -1030,6 +1033,7 @@ function renderAiBotResponse(responseText) {
 function applyCampaignToLauncher(cfg) {
   if (!cfg) return;
 
+  // 1. Apply Niche
   if (cfg.niche && inputNiche) {
     inputNiche.value = cfg.niche;
     document.querySelectorAll('#niche-chips .chip').forEach(c => {
@@ -1037,6 +1041,7 @@ function applyCampaignToLauncher(cfg) {
     });
   }
 
+  // 2. Apply Country & City
   if (cfg.country && selectCountry) {
     selectCountry.value = cfg.country;
     updateCityChips(cfg.country);
@@ -1046,12 +1051,31 @@ function applyCampaignToLauncher(cfg) {
     inputCity.value = cfg.city;
   }
 
+  // 3. Apply Depth
   if (cfg.depth && inputDepth) {
     inputDepth.value = cfg.depth;
     if (depthVal) depthVal.textContent = cfg.depth;
     updateDepthEstimate(cfg.depth);
   }
 
+  // 4. Apply Service / Custom Service
+  if (cfg.service || cfg.custom_service) {
+    const isDefault = cfg.service === 'web_design' && !cfg.custom_service;
+    if (selectService) {
+      selectService.value = isDefault ? 'web_design' : 'custom';
+    }
+    if (inputCustomService) {
+      if (isDefault) {
+        inputCustomService.classList.add('hidden');
+        inputCustomService.value = '';
+      } else {
+        inputCustomService.classList.remove('hidden');
+        inputCustomService.value = cfg.custom_service || (cfg.service !== 'custom' ? cfg.service : 'Custom Service');
+      }
+    }
+  }
+
+  // 5. Apply Custom Copy
   if (cfg.custom_subject && inputCustomSubject) {
     inputCustomSubject.value = cfg.custom_subject;
   }
