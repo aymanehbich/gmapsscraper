@@ -55,11 +55,10 @@
           <span>n8n Webhook</span>
         </div>
 
-        <button id="btn-settings-toggle" class="btn btn-secondary" title="GitHub Configuration">
-          <i data-lucide="key"></i>
-          <span>Credentials</span>
-          <span id="pat-status-dot" class="status-dot dot-offline"></span>
-        </button>
+        <div class="nav-pill" id="cloud-status-pill" title="Protected Vercel Cloud Backend">
+          <span class="status-dot dot-online"></span>
+          <span>Cloud Secure</span>
+        </div>
 
         <button id="btn-lock-hub" class="btn btn-ghost" title="Lock Hub">
           <i data-lucide="lock"></i>
@@ -72,62 +71,6 @@
         </a>
       </div>
     </header>
-
-    <!-- Settings Modal -->
-    <div id="settings-panel" class="modal-overlay hidden">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h3>Authentication & API Settings</h3>
-          <button id="btn-close-settings" class="btn-icon" aria-label="Close">
-            <i data-lucide="x"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="input-pat">GitHub Personal Access Token (PAT)</label>
-            <div class="input-wrap">
-              <input type="password" id="input-pat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-              <button id="btn-toggle-pat-view" type="button" class="btn-icon" aria-label="Toggle visibility">
-                <i data-lucide="eye"></i>
-              </button>
-            </div>
-            <p class="field-hint">Required with <code>workflow</code> scope to trigger GitHub Actions.</p>
-          </div>
-
-          <div class="form-group">
-            <label for="input-brevo-key">Brevo API Key (Optional)</label>
-            <div class="input-wrap">
-              <input type="password" id="input-brevo-key" placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-              <button id="btn-toggle-brevo-view" type="button" class="btn-icon" aria-label="Toggle visibility">
-                <i data-lucide="eye"></i>
-              </button>
-            </div>
-            <p class="field-hint">Tracks remaining daily 300 free email credits.</p>
-          </div>
-
-          <div class="form-group">
-            <label for="input-ai-key">DeepSeek API Key</label>
-            <div class="input-wrap">
-              <input type="password" id="input-ai-key" placeholder="sk-..." autocomplete="off">
-              <button id="btn-toggle-ai-view" type="button" class="btn-icon" aria-label="Toggle visibility">
-                <i data-lucide="eye"></i>
-              </button>
-            </div>
-            <p class="field-hint">Powers the AI Campaign Copilot with <strong>DeepSeek V3</strong>.</p>
-          </div>
-
-          <div style="margin-top: 12px; padding: 8px 12px; background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; font-size: 0.72rem; color: #a5b4fc;">
-            ☁️ <strong>Vercel Deployment:</strong> When deployed on Vercel, all keys are loaded automatically from your Environment Variables (<code>GH_PAT</code>, <code>BREVO_API_KEY</code>, <code>DEEPSEEK_API_KEY</code>).
-          </div>
-        </div>
-        <div class="modal-footer">
-          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener" class="link-sub">
-            Get DeepSeek API Key &rarr;
-          </a>
-          <button id="btn-save-pat" class="btn btn-primary">Save Settings</button>
-        </div>
-      </div>
-    </div>
 
     <!-- Main Workspace Grid -->
     <main class="main-layout">

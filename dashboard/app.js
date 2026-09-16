@@ -41,19 +41,27 @@ let pollInterval = null;
 let lockScreenOverlay, lockCard, lockForm, inputLockPassword, btnToggleLockPwd, lockErrorMsg, btnUnlockHub, btnLockHub;
 
 // Main DOM Elements
-let inputPat, btnSavePat, btnSettingsToggle, btnCloseSettings, settingsPanel, patStatusDot, btnTogglePatView;
 let scrapeForm, inputNiche, selectCountry, inputCity, inputDepth, depthVal, toggleEnrich, toggleN8n, btnLaunch;
 let nicheChips, cityChips, runsContainer, btnRefreshRuns, toastContainer;
 let selectService, inputCustomService, btnToggleCopy, copyPanel, inputCustomSubject, inputCustomPitch, inputDemoLink;
-let inputAiKey, btnToggleAiView, btnToggleAi, aiChatDrawer, btnCloseAi, btnClearAi, aiMessages, aiChatForm, inputAiPrompt;
+let btnToggleAi, aiChatDrawer, btnCloseAi, btnClearAi, aiMessages, aiChatForm, inputAiPrompt;
 
 // Brevo Elements
-let inputBrevoKey, btnToggleBrevoView, btnRefreshQuota, quotaStatusBadge;
+let btnRefreshQuota, quotaStatusBadge;
 let quotaRemainingVal, quotaCapVal, quotaSentVal, quotaPercentVal, quotaProgressBar;
-let quotaResetCountdown, brevoApiStatusNote, linkConfigureBrevo;
+let quotaResetCountdown, brevoApiStatusNote;
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
+  // Purge any lingering legacy client-side tokens from localStorage
+  try {
+    localStorage.removeItem('gh_pat');
+    localStorage.removeItem('brevo_api_key');
+    localStorage.removeItem('ai_api_key');
+    localStorage.removeItem('ai_provider');
+    localStorage.removeItem('openrouter_model');
+  } catch (e) {}
+
   // Lock Elements
   lockScreenOverlay = document.getElementById('lock-screen-overlay');
   lockCard = document.getElementById('lock-card');
@@ -65,14 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
   btnLockHub = document.getElementById('btn-lock-hub');
 
   // Main UI Elements
-  inputPat = document.getElementById('input-pat');
-  btnSavePat = document.getElementById('btn-save-pat');
-  btnSettingsToggle = document.getElementById('btn-settings-toggle');
-  btnCloseSettings = document.getElementById('btn-close-settings');
-  settingsPanel = document.getElementById('settings-panel');
-  patStatusDot = document.getElementById('pat-status-dot');
-  btnTogglePatView = document.getElementById('btn-toggle-pat-view');
-
   scrapeForm = document.getElementById('scrape-form');
   inputNiche = document.getElementById('input-niche');
   selectCountry = document.getElementById('select-country');
@@ -91,8 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
   inputCustomPitch = document.getElementById('input-custom-pitch');
   inputDemoLink = document.getElementById('input-demo-link');
 
-  inputAiKey = document.getElementById('input-ai-key');
-  btnToggleAiView = document.getElementById('btn-toggle-ai-view');
   btnToggleAi = document.getElementById('btn-toggle-ai');
   aiChatDrawer = document.getElementById('ai-chat-drawer');
   btnCloseAi = document.getElementById('btn-close-ai');
@@ -108,8 +106,6 @@ document.addEventListener('DOMContentLoaded', () => {
   toastContainer = document.getElementById('toast-container');
 
   // Brevo Elements
-  inputBrevoKey = document.getElementById('input-brevo-key');
-  btnToggleBrevoView = document.getElementById('btn-toggle-brevo-view');
   btnRefreshQuota = document.getElementById('btn-refresh-quota');
   quotaStatusBadge = document.getElementById('quota-status-badge');
   quotaRemainingVal = document.getElementById('quota-remaining-val');
@@ -119,7 +115,6 @@ document.addEventListener('DOMContentLoaded', () => {
   quotaProgressBar = document.getElementById('quota-progress-bar');
   quotaResetCountdown = document.getElementById('quota-reset-countdown');
   brevoApiStatusNote = document.getElementById('brevo-api-status-note');
-  linkConfigureBrevo = document.getElementById('link-configure-brevo');
 
   if (window.lucide) {
     window.lucide.createIcons();
@@ -244,8 +239,6 @@ function unlockHubUI() {
   if (lockScreenOverlay) {
     lockScreenOverlay.classList.add('hidden');
   }
-  loadStoredPat();
-  loadStoredBrevoKey();
   updateCityChips(selectCountry ? selectCountry.value : 'United_States');
   initBrevoIntegration();
   initAiAssistant();
@@ -296,83 +289,6 @@ async function pingN8nWebhook() {
 
 // Event Listeners
 function setupEventListeners() {
-  // Settings Drawer Toggle
-  if (btnSettingsToggle) {
-    btnSettingsToggle.addEventListener('click', () => {
-      openSettings();
-    });
-  }
-
-  if (btnCloseSettings) {
-    btnCloseSettings.addEventListener('click', () => {
-      closeSettings();
-    });
-  }
-
-  if (settingsPanel) {
-    settingsPanel.addEventListener('click', (e) => {
-      if (e.target === settingsPanel) {
-        closeSettings();
-      }
-    });
-  }
-
-  // Toggle PAT Visibility
-  if (btnTogglePatView && inputPat) {
-    btnTogglePatView.addEventListener('click', () => {
-      const isPwd = inputPat.type === 'password';
-      inputPat.type = isPwd ? 'text' : 'password';
-      const icon = btnTogglePatView.querySelector('svg');
-      if (icon) icon.style.opacity = isPwd ? '1' : '0.5';
-    });
-  }
-
-  // Toggle Brevo Visibility
-  if (btnToggleBrevoView && inputBrevoKey) {
-    btnToggleBrevoView.addEventListener('click', () => {
-      const isPwd = inputBrevoKey.type === 'password';
-      inputBrevoKey.type = isPwd ? 'text' : 'password';
-      const icon = btnToggleBrevoView.querySelector('svg');
-      if (icon) icon.style.opacity = isPwd ? '1' : '0.5';
-    });
-  }
-
-  // Save Settings Button
-  if (btnSavePat) {
-    btnSavePat.addEventListener('click', () => {
-      // Save PAT
-      const patVal = inputPat ? inputPat.value.trim() : '';
-      if (patVal) {
-        localStorage.setItem('gh_pat', patVal);
-        updatePatStatus(true);
-      } else {
-        localStorage.removeItem('gh_pat');
-        updatePatStatus(false);
-      }
-
-      // Save Brevo Key
-      const brevoVal = inputBrevoKey ? inputBrevoKey.value.trim() : '';
-      if (brevoVal) {
-        localStorage.setItem('brevo_api_key', brevoVal);
-      } else {
-        localStorage.removeItem('brevo_api_key');
-      }
-
-      // Save Gemini Key
-      const aiVal = inputAiKey ? inputAiKey.value.trim() : '';
-      if (aiVal) {
-        localStorage.setItem('ai_api_key', aiVal);
-      } else {
-        localStorage.removeItem('ai_api_key');
-      }
-
-      showToast('Settings saved successfully!', 'success');
-      fetchBrevoQuota();
-      closeSettings();
-      fetchRuns();
-    });
-  }
-
   // Niche Chips
   if (nicheChips) {
     nicheChips.addEventListener('click', (e) => {
@@ -470,22 +386,6 @@ function updateDepthEstimate(val) {
   }
 }
 
-function openSettings(focusField = 'pat') {
-  if (!settingsPanel) return;
-  settingsPanel.classList.remove('hidden');
-  if (focusField === 'brevo' && inputBrevoKey) {
-    inputBrevoKey.focus();
-  } else if (inputPat) {
-    inputPat.focus();
-  }
-}
-
-function closeSettings() {
-  if (settingsPanel) {
-    settingsPanel.classList.add('hidden');
-  }
-}
-
 // Update City Chips on Country Change
 function updateCityChips(country) {
   if (!cityChips) return;
@@ -515,33 +415,6 @@ function updateCityChips(country) {
 
   if (cities.length > 0 && inputCity && !inputCity.value) {
     inputCity.value = cities[0];
-  }
-}
-
-// PAT Storage Helpers
-function loadStoredPat() {
-  const stored = getCredential('gh_pat');
-  if (inputPat) {
-    inputPat.value = stored;
-  }
-  updatePatStatus(Boolean(stored));
-}
-
-function loadStoredBrevoKey() {
-  const storedBrevo = getCredential('brevo_api_key');
-  if (storedBrevo && inputBrevoKey) {
-    inputBrevoKey.value = storedBrevo;
-  }
-}
-
-function updatePatStatus(hasToken) {
-  if (!patStatusDot) return;
-  if (hasToken) {
-    patStatusDot.className = 'status-dot dot-online';
-    patStatusDot.title = 'GitHub Token Active';
-  } else {
-    patStatusDot.className = 'status-dot dot-offline';
-    patStatusDot.title = 'No Token Configured';
   }
 }
 
