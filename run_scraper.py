@@ -160,6 +160,7 @@ def run_scraper():
                 "-input", "/queries.txt",
                 "-results", "/out/raw_results.json",
                 "-json",
+                "-email",
                 "-depth", str(args.depth),
                 "-exit-on-inactivity", args.exit_on_inactivity,
                 "-c", str(args.concurrency)
