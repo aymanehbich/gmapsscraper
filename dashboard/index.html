@@ -155,6 +155,51 @@
             </div>
           </div>
 
+          <!-- Service Selection -->
+          <div class="form-group">
+            <label for="select-service">Campaign Service / Offer</label>
+            <select id="select-service">
+              <option value="web_design" selected>🌐 Website Redesign & Modernization</option>
+              <option value="local_seo">📍 Google Maps & Local SEO Ranking</option>
+              <option value="reputation">⭐ Google 5-Star Review Automation</option>
+              <option value="ai_automation">🤖 AI Chatbot & 24/7 Booking Assistant</option>
+              <option value="custom">✍️ Custom Service Key...</option>
+            </select>
+            <input type="text" id="input-custom-service" class="hidden" placeholder="Type service key (e.g. branding, paid_ads)" style="margin-top: 6px;">
+          </div>
+
+          <!-- Custom Email Copy Accordion -->
+          <div class="accordion-box">
+            <button type="button" id="btn-toggle-copy" class="accordion-toggle">
+              <span class="accordion-title">
+                <i data-lucide="edit-3"></i>
+                <span>Custom Email Copy (Optional Override)</span>
+              </span>
+              <i data-lucide="chevron-down" id="accordion-icon"></i>
+            </button>
+            <div id="copy-panel" class="accordion-content hidden">
+              <div class="form-group">
+                <label for="input-custom-subject">Subject Line</label>
+                <input type="text" id="input-custom-subject" placeholder="e.g. Quick question for {{title}} in {{city}}">
+              </div>
+              <div class="form-group" style="margin-top: 8px;">
+                <label for="input-custom-pitch">Pitch / Value Proposition</label>
+                <textarea id="input-custom-pitch" rows="3" placeholder="e.g. We help {{category}} businesses in {{city}} convert 3x more local inquiries..."></textarea>
+              </div>
+              <div class="form-group" style="margin-top: 8px;">
+                <label for="input-demo-link">Demo or Portfolio URL</label>
+                <input type="text" id="input-demo-link" placeholder="https://demo.aymanehbich.com/showcase">
+              </div>
+              <div class="variables-bar">
+                <span>Variables:</span>
+                <code>{{title}}</code>
+                <code>{{city}}</code>
+                <code>{{category}}</code>
+                <code>{{demoLink}}</code>
+              </div>
+            </div>
+          </div>
+
           <!-- Clean Toggles -->
           <div class="toggles-row">
             <label class="toggle-item">

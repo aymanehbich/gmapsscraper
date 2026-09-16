@@ -24,6 +24,7 @@ let pollInterval = null;
 let inputPat, btnSavePat, btnSettingsToggle, btnCloseSettings, settingsPanel, patStatusDot, btnTogglePatView;
 let scrapeForm, inputNiche, selectCountry, inputCity, inputDepth, depthVal, toggleEnrich, toggleN8n, btnLaunch;
 let nicheChips, cityChips, runsContainer, btnRefreshRuns, toastContainer;
+let selectService, inputCustomService, btnToggleCopy, copyPanel, inputCustomSubject, inputCustomPitch, inputDemoLink;
 
 // Brevo Elements
 let inputBrevoKey, btnToggleBrevoView, btnRefreshQuota, quotaStatusBadge;
@@ -50,6 +51,14 @@ document.addEventListener('DOMContentLoaded', () => {
   toggleEnrich = document.getElementById('toggle-enrich');
   toggleN8n = document.getElementById('toggle-n8n');
   btnLaunch = document.getElementById('btn-launch');
+
+  selectService = document.getElementById('select-service');
+  inputCustomService = document.getElementById('input-custom-service');
+  btnToggleCopy = document.getElementById('btn-toggle-copy');
+  copyPanel = document.getElementById('copy-panel');
+  inputCustomSubject = document.getElementById('input-custom-subject');
+  inputCustomPitch = document.getElementById('input-custom-pitch');
+  inputDemoLink = document.getElementById('input-demo-link');
 
   nicheChips = document.getElementById('niche-chips');
   cityChips = document.getElementById('city-chips');
@@ -186,6 +195,44 @@ function setupEventListeners() {
       if (inputNiche) inputNiche.value = chip.dataset.niche;
     });
   }
+
+  // Service Selection Change
+  if (selectService) {
+    selectService.addEventListener('change', () => {
+      if (inputCustomService) {
+        if (selectService.value === 'custom') {
+          inputCustomService.classList.remove('hidden');
+          inputCustomService.focus();
+        } else {
+          inputCustomService.classList.add('hidden');
+        }
+      }
+    });
+  }
+
+  // Toggle Custom Email Copy Accordion
+  if (btnToggleCopy && copyPanel) {
+    btnToggleCopy.addEventListener('click', () => {
+      copyPanel.classList.toggle('hidden');
+      const icon = document.getElementById('accordion-icon');
+      if (icon) {
+        icon.style.transform = copyPanel.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+        icon.style.transition = 'transform 0.2s ease';
+      }
+    });
+  }
+
+  // Click on variable chips to insert into active input
+  document.querySelectorAll('.variables-bar code').forEach(codeEl => {
+    codeEl.addEventListener('click', () => {
+      const varText = codeEl.textContent.trim();
+      if (inputCustomPitch) {
+        inputCustomPitch.value += ` ${varText}`;
+        inputCustomPitch.focus();
+        showToast(`Inserted ${varText}`, 'info');
+      }
+    });
+  });
 
   // Country Selection Change
   if (selectCountry) {
@@ -467,6 +514,15 @@ async function handleLaunch(e) {
   const enrichEmails = toggleEnrich ? toggleEnrich.checked : true;
   const sendToN8n = toggleN8n ? toggleN8n.checked : true;
 
+  // Read Service & Custom Copy
+  let service = selectService ? selectService.value : 'web_design';
+  if (service === 'custom' && inputCustomService) {
+    service = inputCustomService.value.trim() || 'custom';
+  }
+  const customSubject = inputCustomSubject ? inputCustomSubject.value.trim() : '';
+  const customPitch = inputCustomPitch ? inputCustomPitch.value.trim() : '';
+  const demoLink = inputDemoLink ? inputDemoLink.value.trim() : '';
+
   if (!niche) {
     showToast('Please specify a target niche', 'error');
     return;
@@ -493,7 +549,11 @@ async function handleLaunch(e) {
           city: city,
           depth: depth,
           enrich_emails: enrichEmails,
-          send_to_n8n: sendToN8n
+          send_to_n8n: sendToN8n,
+          service: service,
+          custom_subject: customSubject,
+          custom_pitch: customPitch,
+          demo_link: demoLink
         }
       })
     });

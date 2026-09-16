@@ -299,6 +299,7 @@ body {
 .clean-form input[type="text"],
 .clean-form input[type="password"],
 .clean-form select,
+.clean-form textarea,
 .modal-body input {
   width: 100%;
   padding: 0.6rem 0.85rem;
@@ -309,14 +310,91 @@ body {
   font-size: 0.85rem;
   font-family: inherit;
   transition: var(--transition);
+  resize: vertical;
 }
 
 .clean-form input:focus,
 .clean-form select:focus,
+.clean-form textarea:focus,
 .modal-body input:focus {
   outline: none;
   border-color: #6366f1;
   background: #172033;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Accordion Box */
+.accordion-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.accordion-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.accordion-toggle:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.accordion-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.accordion-title svg {
+  width: 14px;
+  height: 14px;
+  color: #818cf8;
+}
+
+.accordion-content {
+  padding: 0.85rem;
+  border-top: 1px solid var(--border);
+  background: #0e1422;
+}
+
+.variables-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+  font-size: 0.7rem;
+  color: var(--text-sub);
+  flex-wrap: wrap;
+}
+
+.variables-bar code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.35rem;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+  color: #818cf8;
+  cursor: pointer;
+}
+
+.variables-bar code:hover {
+  background: var(--primary-light);
+  color: #c7d2fe;
 }
 
 .form-row {
