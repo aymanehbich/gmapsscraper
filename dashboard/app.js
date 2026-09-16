@@ -241,7 +241,6 @@ function unlockHubUI() {
   }
   updateCityChips(selectCountry ? selectCountry.value : 'United_States');
   initBrevoIntegration();
-  initAiAssistant();
   fetchRuns();
   pingN8nWebhook();
 
@@ -363,6 +362,68 @@ function setupEventListeners() {
     }
   });
 
+  // AI Assistant Drawer Controls
+  if (btnToggleAi) {
+    btnToggleAi.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleAiDrawer();
+    });
+  }
+
+  if (btnCloseAi) {
+    btnCloseAi.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAiDrawer();
+    });
+  }
+
+  if (btnClearAi && aiMessages) {
+    btnClearAi.addEventListener('click', () => {
+      aiMessages.innerHTML = `
+        <div class="ai-msg ai-msg-bot">
+          <div class="ai-bubble">
+            <p>Chat cleared. Tell me what campaign, niche, or pitch you want to create!</p>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  // Quick Prompt Chips
+  document.querySelectorAll('.ai-prompt-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const promptText = chip.dataset.prompt;
+      if (inputAiPrompt) {
+        inputAiPrompt.value = promptText;
+        if (aiChatForm) {
+          aiChatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }
+    });
+  });
+
+  // AI Chat Form Submit
+  if (aiChatForm) {
+    aiChatForm.addEventListener('submit', handleAiSubmit);
+  }
+
+  // Close AI Drawer on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && aiChatDrawer && !aiChatDrawer.classList.contains('hidden')) {
+      closeAiDrawer();
+    }
+  });
+
+  // Brevo Refresh Button
+  if (btnRefreshQuota) {
+    btnRefreshQuota.addEventListener('click', () => {
+      btnRefreshQuota.querySelector('svg')?.classList.add('animate-spin');
+      fetchBrevoQuota().finally(() => {
+        btnRefreshQuota.querySelector('svg')?.classList.remove('animate-spin');
+      });
+    });
+  }
+
   // Refresh Runs Button
   if (btnRefreshRuns) {
     btnRefreshRuns.addEventListener('click', () => {
@@ -376,6 +437,29 @@ function setupEventListeners() {
   // Form Submit (Launch)
   if (scrapeForm) {
     scrapeForm.addEventListener('submit', handleLaunch);
+  }
+}
+
+// AI Drawer Helpers
+function openAiDrawer() {
+  if (!aiChatDrawer) return;
+  aiChatDrawer.classList.remove('hidden');
+  if (inputAiPrompt) {
+    setTimeout(() => inputAiPrompt.focus(), 60);
+  }
+}
+
+function closeAiDrawer() {
+  if (!aiChatDrawer) return;
+  aiChatDrawer.classList.add('hidden');
+}
+
+function toggleAiDrawer() {
+  if (!aiChatDrawer) return;
+  if (aiChatDrawer.classList.contains('hidden')) {
+    openAiDrawer();
+  } else {
+    closeAiDrawer();
   }
 }
 
@@ -422,30 +506,12 @@ function updateCityChips(country) {
 // Brevo Quota & Account Management
 // ==========================================================================
 
+let brevoCountdownTimer = null;
 function initBrevoIntegration() {
-  // Direct click handler on Connect API Key link
-  if (linkConfigureBrevo) {
-    linkConfigureBrevo.addEventListener('click', (e) => {
-      e.preventDefault();
-      openSettings('brevo');
-    });
+  if (!brevoCountdownTimer) {
+    updateResetCountdown();
+    brevoCountdownTimer = setInterval(updateResetCountdown, 60000);
   }
-
-  // Refresh quota button
-  if (btnRefreshQuota) {
-    btnRefreshQuota.addEventListener('click', () => {
-      btnRefreshQuota.querySelector('svg')?.classList.add('animate-spin');
-      fetchBrevoQuota().finally(() => {
-        btnRefreshQuota.querySelector('svg')?.classList.remove('animate-spin');
-      });
-    });
-  }
-
-  // Update countdown timer immediately and every minute
-  updateResetCountdown();
-  setInterval(updateResetCountdown, 60000);
-
-  // Initial quota display
   fetchBrevoQuota();
 }
 
@@ -826,68 +892,6 @@ IMPORTANT: At the end of your response, output a JSON block wrapped in \`\`\`jso
   }
 }
 \`\`\``;
-
-function initAiAssistant() {
-  const storedAiKey = getCredential('ai_api_key');
-  if (storedAiKey && inputAiKey) {
-    inputAiKey.value = storedAiKey;
-  }
-
-  if (btnToggleAiView && inputAiKey) {
-    btnToggleAiView.addEventListener('click', () => {
-      const isPwd = inputAiKey.type === 'password';
-      inputAiKey.type = isPwd ? 'text' : 'password';
-    });
-  }
-
-  // Toggle AI Drawer
-  if (btnToggleAi && aiChatDrawer) {
-    btnToggleAi.addEventListener('click', () => {
-      aiChatDrawer.classList.toggle('hidden');
-      if (!aiChatDrawer.classList.contains('hidden') && inputAiPrompt) {
-        inputAiPrompt.focus();
-      }
-    });
-  }
-
-  // Close AI Drawer
-  if (btnCloseAi && aiChatDrawer) {
-    btnCloseAi.addEventListener('click', () => {
-      aiChatDrawer.classList.add('hidden');
-    });
-  }
-
-  // Clear Messages
-  if (btnClearAi && aiMessages) {
-    btnClearAi.addEventListener('click', () => {
-      aiMessages.innerHTML = `
-        <div class="ai-msg ai-msg-bot">
-          <div class="ai-bubble">
-            <p>Chat cleared. Tell me what campaign, niche, or pitch you want to create!</p>
-          </div>
-        </div>
-      `;
-    });
-  }
-
-  // Quick Prompt Chips
-  document.querySelectorAll('.ai-prompt-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const promptText = chip.dataset.prompt;
-      if (inputAiPrompt) {
-        inputAiPrompt.value = promptText;
-        if (aiChatForm) {
-          aiChatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-        }
-      }
-    });
-  });
-
-  // Chat Form Submit
-  if (aiChatForm) {
-    aiChatForm.addEventListener('submit', handleAiSubmit);
-  }
-}
 
 async function handleAiSubmit(e) {
   e.preventDefault();
