@@ -25,7 +25,7 @@ let inputPat, btnSavePat, btnSettingsToggle, btnCloseSettings, settingsPanel, pa
 let scrapeForm, inputNiche, selectCountry, inputCity, inputDepth, depthVal, toggleEnrich, toggleN8n, btnLaunch;
 let nicheChips, cityChips, runsContainer, btnRefreshRuns, toastContainer;
 let selectService, inputCustomService, btnToggleCopy, copyPanel, inputCustomSubject, inputCustomPitch, inputDemoLink;
-let inputAiKey, btnToggleAiView, btnToggleAi, aiChatDrawer, btnCloseAi, btnClearAi, aiMessages, aiChatForm, inputAiPrompt;
+let selectAiProvider, inputAiKey, inputOpenrouterModel, openrouterModelGroup, btnToggleAiView, btnToggleAi, aiChatDrawer, btnCloseAi, btnClearAi, aiMessages, aiChatForm, inputAiPrompt;
 
 // Brevo Elements
 let inputBrevoKey, btnToggleBrevoView, btnRefreshQuota, quotaStatusBadge;
@@ -61,7 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
   inputCustomPitch = document.getElementById('input-custom-pitch');
   inputDemoLink = document.getElementById('input-demo-link');
 
+  selectAiProvider = document.getElementById('select-ai-provider');
   inputAiKey = document.getElementById('input-ai-key');
+  inputOpenrouterModel = document.getElementById('input-openrouter-model');
+  openrouterModelGroup = document.getElementById('openrouter-model-group');
   btnToggleAiView = document.getElementById('btn-toggle-ai-view');
   btnToggleAi = document.getElementById('btn-toggle-ai');
   aiChatDrawer = document.getElementById('ai-chat-drawer');
@@ -100,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateCityChips(selectCountry ? selectCountry.value : 'United_States');
   setupEventListeners();
   initBrevoIntegration();
+  initAiAssistant();
   fetchRuns();
   pingN8nWebhook();
 
@@ -187,12 +191,21 @@ function setupEventListeners() {
         localStorage.removeItem('brevo_api_key');
       }
 
-      // Save AI Key
+      // Save AI Settings
       const aiVal = inputAiKey ? inputAiKey.value.trim() : '';
       if (aiVal) {
         localStorage.setItem('ai_api_key', aiVal);
       } else {
         localStorage.removeItem('ai_api_key');
+      }
+
+      if (selectAiProvider) {
+        localStorage.setItem('ai_provider', selectAiProvider.value);
+      }
+
+      if (inputOpenrouterModel) {
+        const modelVal = inputOpenrouterModel.value.trim() || 'deepseek/deepseek-chat';
+        localStorage.setItem('openrouter_model', modelVal);
       }
 
       showToast('Settings saved successfully!', 'success');
@@ -720,10 +733,61 @@ function showToast(message, type = 'info') {
 // AI Assistant & Campaign Copilot
 // ==========================================================================
 
+const SYSTEM_AI_INSTRUCTION = `You are the LeadLaunch AI Outreach Copilot for Aymane. You generate cold email pitches, subject lines, and campaign setups for B2B local business outreach (Plumbers, Electricians, Dentists, Roofers, etc.) in English or French.
+When the user asks for a pitch, campaign, or service, craft a compelling, concise 2-sentence pitch with natural variables (like {{title}}, {{city}}, {{category}}, {{demoLink}}).
+IMPORTANT: At the end of your response, output a JSON block wrapped in \`\`\`json containing the campaign parameters so the user can apply it in 1 click:
+\`\`\`json
+{
+  "campaignConfig": {
+    "niche": "Target Niche",
+    "country": "United_States or France or Morocco or United_Kingdom",
+    "city": "City name",
+    "service": "web_design or custom key",
+    "custom_subject": "Subject with {{title}} and {{city}}",
+    "custom_pitch": "Punchy 2-sentence pitch",
+    "demo_link": "https://demo.aymanehbich.com/showcase",
+    "depth": 20
+  }
+}
+\`\`\``;
+
 function initAiAssistant() {
   const storedAiKey = localStorage.getItem('ai_api_key');
   if (storedAiKey && inputAiKey) {
     inputAiKey.value = storedAiKey;
+  }
+
+  const storedProvider = localStorage.getItem('ai_provider') || 'openrouter';
+  if (selectAiProvider) {
+    selectAiProvider.value = storedProvider;
+  }
+
+  const storedModel = localStorage.getItem('openrouter_model') || 'deepseek/deepseek-chat';
+  if (inputOpenrouterModel) {
+    inputOpenrouterModel.value = storedModel;
+  }
+
+  function updateModelVisibility() {
+    if (!openrouterModelGroup || !selectAiProvider) return;
+    openrouterModelGroup.style.display = selectAiProvider.value === 'openrouter' ? 'block' : 'none';
+  }
+
+  if (selectAiProvider) {
+    selectAiProvider.addEventListener('change', updateModelVisibility);
+    updateModelVisibility();
+  }
+
+  if (inputAiKey) {
+    inputAiKey.addEventListener('input', () => {
+      const val = inputAiKey.value.trim();
+      if (val.startsWith('sk-or-') && selectAiProvider) {
+        selectAiProvider.value = 'openrouter';
+        updateModelVisibility();
+      } else if (val.startsWith('AIzaSy') && selectAiProvider) {
+        selectAiProvider.value = 'gemini';
+        updateModelVisibility();
+      }
+    });
   }
 
   if (btnToggleAiView && inputAiKey) {
@@ -793,7 +857,7 @@ async function handleAiSubmit(e) {
 
   const apiKey = localStorage.getItem('ai_api_key');
   if (!apiKey) {
-    appendAiMessage(`⚠️ <strong>AI API Key Required</strong><br>Please open <a href="#" id="link-open-ai-settings" style="color:#818cf8; text-decoration:underline;">Settings</a> and paste your free Google Gemini API Key (or OpenAI key) to enable AI generation.`, 'bot');
+    appendAiMessage(`⚠️ <strong>AI API Key Required</strong><br>Please open <a href="#" id="link-open-ai-settings" style="color:#818cf8; text-decoration:underline;">Settings</a> and paste your OpenRouter API Key (or Gemini key) to enable AI generation.`, 'bot');
     const linkEl = document.getElementById('link-open-ai-settings');
     if (linkEl) {
       linkEl.addEventListener('click', (ev) => {
@@ -804,12 +868,22 @@ async function handleAiSubmit(e) {
     return;
   }
 
+  const provider = localStorage.getItem('ai_provider') || (apiKey.startsWith('sk-or-') ? 'openrouter' : (apiKey.startsWith('AIzaSy') ? 'gemini' : 'openrouter'));
+  const model = localStorage.getItem('openrouter_model') || 'deepseek/deepseek-chat';
+
   // Append Thinking Indicator
   const loaderId = `ai-loader-${Date.now()}`;
-  appendAiMessage(`<span id="${loaderId}">Thinking & crafting campaign copy...</span>`, 'bot');
+  const modelLabel = provider === 'openrouter' ? model : 'Gemini 1.5';
+  appendAiMessage(`<span id="${loaderId}">Thinking with <strong>${modelLabel}</strong>...</span>`, 'bot');
 
   try {
-    const aiResponse = await callGeminiApi(apiKey, userText);
+    let aiResponse;
+    if (provider === 'gemini' || apiKey.startsWith('AIzaSy')) {
+      aiResponse = await callGeminiApi(apiKey, userText);
+    } else {
+      aiResponse = await callOpenRouterApi(apiKey, model, userText);
+    }
+
     const loaderEl = document.getElementById(loaderId);
     if (loaderEl && loaderEl.closest('.ai-msg')) {
       loaderEl.closest('.ai-msg').remove();
@@ -835,31 +909,47 @@ function appendAiMessage(htmlContent, sender = 'bot') {
   if (window.lucide) window.lucide.createIcons();
 }
 
-async function callGeminiApi(apiKey, userPrompt) {
-  const systemInstruction = `You are the LeadLaunch AI Outreach Copilot for Aymane. You generate cold email pitches, subject lines, and campaign setups for B2B local business outreach (Plumbers, Electricians, Dentists, Roofers, etc.) in English or French.
-When the user asks for a pitch, campaign, or service, craft a compelling, concise 2-sentence pitch with natural variables (like {{title}}, {{city}}, {{category}}, {{demoLink}}).
-IMPORTANT: At the end of your response, output a JSON block wrapped in \`\`\`json containing the campaign parameters so the user can apply it in 1 click:
-\`\`\`json
-{
-  "campaignConfig": {
-    "niche": "Target Niche",
-    "country": "United_States or France or Morocco or United_Kingdom",
-    "city": "City name",
-    "service": "web_design or custom key",
-    "custom_subject": "Subject with {{title}} and {{city}}",
-    "custom_pitch": "Punchy 2-sentence pitch",
-    "demo_link": "https://demo.aymanehbich.com/showcase",
-    "depth": 20
-  }
-}
-\`\`\``;
+async function callOpenRouterApi(apiKey, model, userPrompt) {
+  const url = 'https://openrouter.ai/api/v1/chat/completions';
+  const targetModel = model || 'deepseek/deepseek-chat';
 
+  const payload = {
+    model: targetModel,
+    messages: [
+      { role: 'system', content: SYSTEM_AI_INSTRUCTION },
+      { role: 'user', content: userPrompt }
+    ],
+    temperature: 0.7
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': window.location.origin || 'https://aymanehbich.com',
+      'X-Title': 'LeadLaunch AI Outreach Copilot'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `OpenRouter error (${response.status})`);
+  }
+
+  const result = await response.json();
+  const text = result.choices?.[0]?.message?.content || '';
+  return text;
+}
+
+async function callGeminiApi(apiKey, userPrompt) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   const payload = {
     contents: [
       {
         role: "user",
-        parts: [{ text: `${systemInstruction}\n\nUser Request: ${userPrompt}` }]
+        parts: [{ text: `${SYSTEM_AI_INSTRUCTION}\n\nUser Request: ${userPrompt}` }]
       }
     ]
   };
@@ -872,7 +962,7 @@ IMPORTANT: At the end of your response, output a JSON block wrapped in \`\`\`jso
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `API error (${response.status})`);
+    throw new Error(err.error?.message || `Gemini API error (${response.status})`);
   }
 
   const result = await response.json();

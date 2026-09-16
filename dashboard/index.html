@@ -77,20 +77,40 @@
           </div>
 
           <div class="form-group">
-            <label for="input-ai-key">Gemini / OpenAI API Key (For AI Assistant)</label>
+            <label for="select-ai-provider">AI Provider</label>
+            <select id="select-ai-provider" style="width: 100%; padding: 8px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #f8fafc; font-size: 0.85rem;">
+              <option value="openrouter">OpenRouter (DeepSeek, Claude, LLaMA, GPT-4o)</option>
+              <option value="gemini">Google Gemini (Free Flash 1.5)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-top: 10px;">
+            <label for="input-ai-key">AI API Key (OpenRouter or Gemini)</label>
             <div class="input-wrap">
-              <input type="password" id="input-ai-key" placeholder="AIzaSy... or sk-..." autocomplete="off">
+              <input type="password" id="input-ai-key" placeholder="sk-or-v1-... or AIzaSy..." autocomplete="off">
               <button id="btn-toggle-ai-view" type="button" class="btn-icon" aria-label="Toggle visibility">
                 <i data-lucide="eye"></i>
               </button>
             </div>
-            <p class="field-hint">Powers the in-dashboard AI Campaign & Pitch Assistant.</p>
+            <p class="field-hint">Paste your <strong>OpenRouter API key</strong> (sk-or-...) or <strong>Gemini key</strong>.</p>
+          </div>
+
+          <div class="form-group" id="openrouter-model-group" style="margin-top: 10px;">
+            <label for="input-openrouter-model">OpenRouter Model</label>
+            <input type="text" id="input-openrouter-model" placeholder="deepseek/deepseek-chat" value="deepseek/deepseek-chat">
+            <p class="field-hint">e.g. <code>deepseek/deepseek-chat</code>, <code>google/gemini-2.0-flash-exp:free</code>, <code>meta-llama/llama-3.3-70b-instruct</code></p>
           </div>
         </div>
         <div class="modal-footer">
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="link-sub">
-            Get free Gemini API key &rarr;
-          </a>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="link-sub" style="font-size: 0.75rem;">
+              OpenRouter Keys &rarr;
+            </a>
+            <span style="color: rgba(255,255,255,0.2);">|</span>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" class="link-sub" style="font-size: 0.75rem;">
+              Gemini Key &rarr;
+            </a>
+          </div>
           <button id="btn-save-pat" class="btn btn-primary">Save Settings</button>
         </div>
       </div>
