@@ -1,4 +1,16 @@
 {
+  "Dentist": {
+    "FR": "dentiste",
+    "EN": "dentist"
+  },
+  "Restaurant": {
+    "FR": "restaurant",
+    "EN": "restaurant"
+  },
+  "HVAC": {
+    "FR": "chauffagiste / climatisation",
+    "EN": "HVAC contractor"
+  },
   "Plumber": {
     "FR": "plombier",
     "EN": "plumber"

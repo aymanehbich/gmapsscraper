@@ -57,27 +57,30 @@ def run_scraper():
                     "country_name": country_data.get("country_name", country.replace('_', ' ')),
                     "cities": matching_cities
                 }
-        targets = filtered_targets
-        if not targets:
-            print(f"Error: City '{args.city}' not found in target locations.")
-            sys.exit(1)
+        if filtered_targets:
+            targets = filtered_targets
+        else:
+            # Custom / unlisted city fallback
+            is_french = any(fr in args.city.lower() for fr in ['paris', 'lyon', 'marseille', 'bordeaux', 'toulouse', 'nice', 'nantes', 'lille', 'casablanca', 'rabat', 'marrakech', 'tangier', 'agadir', 'fes', 'bruxelles', 'geneve', 'montreal', 'quebec', 'france', 'maroc'])
+            targets = {
+                "Location": {
+                    "lang": "FR" if is_french else "EN",
+                    "country_name": "Location",
+                    "cities": [args.city]
+                }
+            }
 
     # Load niches
-    if not os.path.exists(args.niches_file):
-        print(f"Error: Niches file not found at '{args.niches_file}'")
-        sys.exit(1)
-        
-    with open(args.niches_file, "r", encoding="utf-8") as f:
-        niches_data = json.load(f)
+    niches_data = {}
+    if os.path.exists(args.niches_file):
+        with open(args.niches_file, "r", encoding="utf-8") as f:
+            niches_data = json.load(f)
 
-    if args.niche not in niches_data:
-        print(f"Error: Niche '{args.niche}' not found in {args.niches_file}")
-        print("Available niches:")
-        for n in sorted(niches_data.keys()):
-            print(f"  - {n}")
-        sys.exit(1)
-
-    niche_translations = niches_data[args.niche]
+    if args.niche in niches_data:
+        niche_translations = niches_data[args.niche]
+    else:
+        print(f"Notice: Custom niche '{args.niche}' using direct keyword search.")
+        niche_translations = {"EN": args.niche, "FR": args.niche}
 
     # Calculate total targets for progress reporting
     total_jobs = sum(len(country_data["cities"]) for country_data in targets.values())

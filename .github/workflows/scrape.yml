@@ -73,6 +73,7 @@ jobs:
 
       - name: 7. Run Google Maps Scraper Orchestrator
         run: |
+          set -e
           CMD="python run_scraper.py --niche \"${{ inputs.niche }}\" --depth ${{ inputs.depth }}"
           if [ -n "${{ inputs.city }}" ]; then
             CMD="$CMD --city \"${{ inputs.city }}\""
@@ -87,7 +88,7 @@ jobs:
           eval $CMD
 
       - name: 8. Push Slim Leads from THIS RUN to n8n Webhook
-        if: ${{ inputs.send_to_n8n == true }}
+        if: ${{ inputs.send_to_n8n == true || inputs.send_to_n8n == 'true' }}
         run: |
           python -c "
           import json, os, glob, requests
