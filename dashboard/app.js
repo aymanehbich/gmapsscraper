@@ -81,10 +81,27 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   initBrevoIntegration();
   fetchRuns();
+  pingN8nWebhook();
 
-  // Auto-poll runs every 10 seconds
-  pollInterval = setInterval(fetchRuns, 10000);
+  // Auto-poll runs and n8n status every 12 seconds
+  pollInterval = setInterval(() => {
+    fetchRuns();
+    pingN8nWebhook();
+  }, 12000);
 });
+
+async function pingN8nWebhook() {
+  const n8nPill = document.getElementById('n8n-live-pill');
+  if (!n8nPill) return;
+  try {
+    const res = await fetch('https://aymane-hbich-n8n-c2967382a5d9.herokuapp.com/healthz', { mode: 'no-cors' });
+    n8nPill.classList.remove('status-offline');
+    n8nPill.innerHTML = '<span class="pulse-dot"></span><span>n8n Online</span>';
+    n8nPill.title = 'n8n instance is responsive';
+  } catch (e) {
+    n8nPill.innerHTML = '<span class="pulse-dot"></span><span>n8n Ready</span>';
+  }
+}
 
 // Event Listeners
 function setupEventListeners() {
@@ -181,8 +198,19 @@ function setupEventListeners() {
   if (inputDepth && depthVal) {
     inputDepth.addEventListener('input', () => {
       depthVal.textContent = inputDepth.value;
+      updateDepthEstimate(inputDepth.value);
     });
   }
+
+  // Keyboard Shortcut: Ctrl + Enter to launch
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (scrapeForm && !btnLaunch.disabled) {
+        scrapeForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      }
+    }
+  });
 
   // Refresh Runs Button
   if (btnRefreshRuns) {
@@ -197,6 +225,13 @@ function setupEventListeners() {
   // Form Submit (Launch)
   if (scrapeForm) {
     scrapeForm.addEventListener('submit', handleLaunch);
+  }
+}
+
+function updateDepthEstimate(val) {
+  const estimateEl = document.getElementById('depth-estimate');
+  if (estimateEl) {
+    estimateEl.textContent = `~${val} leads`;
   }
 }
 

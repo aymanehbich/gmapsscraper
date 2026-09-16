@@ -3,343 +3,268 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LeadLaunch — Scraper & Outreach Control Hub</title>
+  <title>LeadLaunch — Minimalist Scraper & Outreach Hub</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-  <div class="app-background">
-    <div class="glow-orb orb-1"></div>
-    <div class="glow-orb orb-2"></div>
-    <div class="glow-orb orb-3"></div>
-  </div>
-
-  <div class="container">
-    <!-- Header -->
-    <header class="header">
+  <div class="app-wrapper">
+    <!-- Clean Minimalist Header -->
+    <header class="navbar">
       <div class="brand">
-        <div class="logo-badge">
-          <i data-lucide="zap"></i>
+        <div class="brand-icon">
+          <i data-lucide="compass"></i>
         </div>
-        <div class="brand-text">
-          <div class="brand-title-row">
-            <h1>LeadLaunch</h1>
-            <span class="version-tag">PRO</span>
-          </div>
-          <p>Cloud Google Maps Scraper & n8n Outreach Hub</p>
+        <div class="brand-info">
+          <span class="brand-name">LeadLaunch</span>
+          <span class="brand-tag">Outreach Hub</span>
         </div>
       </div>
 
-      <div class="header-actions">
-        <button id="btn-settings-toggle" class="btn btn-secondary btn-icon" title="GitHub Configuration">
+      <div class="nav-controls">
+        <div class="nav-pill" id="n8n-live-pill" title="n8n Webhook Status">
+          <span class="status-indicator online"></span>
+          <span>n8n Webhook</span>
+        </div>
+
+        <button id="btn-settings-toggle" class="btn btn-secondary" title="GitHub Configuration">
           <i data-lucide="key"></i>
           <span>GitHub Token</span>
           <span id="pat-status-dot" class="status-dot dot-offline"></span>
         </button>
-        <a href="https://github.com/aymanehbich/gmapsscraper/actions" target="_blank" rel="noopener" class="btn btn-ghost btn-icon">
-          <i data-lucide="github"></i>
-          <span>Repo Actions</span>
+
+        <a href="https://github.com/aymanehbich/gmapsscraper/actions" target="_blank" rel="noopener" class="btn btn-ghost">
+          <i data-lucide="external-link"></i>
+          <span>Actions</span>
         </a>
       </div>
     </header>
 
-    <!-- Settings Modal / Drawer -->
-    <div id="settings-panel" class="settings-panel hidden">
-      <div class="settings-card glass-panel">
-        <div class="settings-header">
-          <div class="settings-title">
-            <i data-lucide="shield-check"></i>
-            <h3>GitHub Authentication</h3>
-          </div>
-          <button id="btn-close-settings" class="btn-close" aria-label="Close Settings">
+    <!-- Settings Modal -->
+    <div id="settings-panel" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Authentication & API Settings</h3>
+          <button id="btn-close-settings" class="btn-icon" aria-label="Close">
             <i data-lucide="x"></i>
           </button>
         </div>
-        <p class="settings-desc">
-          Enter a GitHub Personal Access Token (classic or fine-grained) with <code>workflow</code> permission so this dashboard can dispatch cloud scrapers.
-        </p>
-
-        <div class="form-group">
-          <label for="input-pat"><i data-lucide="github"></i> GitHub Personal Access Token (PAT)</label>
-          <div class="input-password-wrap">
-            <input type="password" id="input-pat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-            <button id="btn-toggle-pat-view" type="button" class="btn-eye" aria-label="Toggle token visibility">
-              <i data-lucide="eye"></i>
-            </button>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="input-pat">GitHub Personal Access Token (PAT)</label>
+            <div class="input-wrap">
+              <input type="password" id="input-pat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+              <button id="btn-toggle-pat-view" type="button" class="btn-icon" aria-label="Toggle visibility">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+            <p class="field-hint">Required with <code>workflow</code> scope to trigger GitHub Actions.</p>
           </div>
-          <span class="input-hint">Saved in browser's <code>localStorage</code> to trigger scrapers.</span>
-        </div>
 
-        <div class="form-group" style="margin-top: 14px;">
-          <label for="input-brevo-key"><i data-lucide="mail"></i> Brevo API Key (Optional)</label>
-          <div class="input-password-wrap">
-            <input type="password" id="input-brevo-key" placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-            <button id="btn-toggle-brevo-view" type="button" class="btn-eye" aria-label="Toggle key visibility">
-              <i data-lucide="eye"></i>
-            </button>
+          <div class="form-group">
+            <label for="input-brevo-key">Brevo API Key (Optional)</label>
+            <div class="input-wrap">
+              <input type="password" id="input-brevo-key" placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
+              <button id="btn-toggle-brevo-view" type="button" class="btn-icon" aria-label="Toggle visibility">
+                <i data-lucide="eye"></i>
+              </button>
+            </div>
+            <p class="field-hint">Tracks remaining daily 300 free email credits.</p>
           </div>
-          <span class="input-hint">Fetches real-time 300/day email quota & credits directly from Brevo.</span>
         </div>
-
-        <div class="settings-footer">
-          <a href="https://github.com/settings/tokens/new?scopes=workflow,repo&description=LeadLaunch+Dashboard" target="_blank" rel="noopener" class="link-small">
-            Create a token on GitHub &rarr;
+        <div class="modal-footer">
+          <a href="https://github.com/settings/tokens/new?scopes=workflow,repo&description=LeadLaunch" target="_blank" rel="noopener" class="link-sub">
+            Create GitHub token &rarr;
           </a>
-          <button id="btn-save-pat" class="btn btn-primary">
-            <i data-lucide="save"></i> Save Token
-          </button>
+          <button id="btn-save-pat" class="btn btn-primary">Save Settings</button>
         </div>
       </div>
     </div>
 
-    <!-- Main Grid -->
-    <main class="dashboard-grid">
-      <!-- Left Column: Launcher Form -->
-      <section class="launcher-section">
-        <div class="card glass-panel">
-          <div class="card-header">
-            <div class="card-title-wrap">
-              <span class="step-num">1</span>
-              <h2>Launch New Scrape & Campaign</h2>
+    <!-- Main Workspace Grid -->
+    <main class="main-layout">
+      <!-- Left: Launcher Card -->
+      <div class="card card-launcher">
+        <div class="card-header">
+          <div class="card-title">
+            <i data-lucide="send" class="icon-accent"></i>
+            <h2>New Scraping Job</h2>
+          </div>
+          <span class="badge-ready">Ready</span>
+        </div>
+
+        <form id="scrape-form" class="clean-form">
+          <!-- Niche Input & Chips -->
+          <div class="form-group">
+            <label for="input-niche">Target Business Niche</label>
+            <input type="text" id="input-niche" placeholder="e.g. Plumber, Dentist, Electrician" value="Plumber" required>
+            <div class="chips-row" id="niche-chips">
+              <button type="button" class="chip active" data-niche="Plumber">Plumber</button>
+              <button type="button" class="chip" data-niche="Electrician">Electrician</button>
+              <button type="button" class="chip" data-niche="Dentist">Dentist</button>
+              <button type="button" class="chip" data-niche="Roofer">Roofer</button>
+              <button type="button" class="chip" data-niche="HVAC">HVAC</button>
+              <button type="button" class="chip" data-niche="Restaurant">Restaurant</button>
             </div>
-            <span class="live-pill"><span class="pulse-dot"></span> Cloud Ready</span>
           </div>
 
-          <form id="scrape-form" class="scrape-form">
-            <!-- Niche Selection -->
-            <div class="form-group">
-              <div class="label-row">
-                <label for="input-niche"><i data-lucide="briefcase"></i> Target Business Niche</label>
-                <span class="label-badge">Required</span>
-              </div>
-              <input type="text" id="input-niche" placeholder="e.g. Plumber, Electrician, Dentist..." value="Plumber" required>
-              
-              <!-- Quick Niche Chips -->
-              <div class="chips-container" id="niche-chips">
-                <button type="button" class="chip active" data-niche="Plumber">Plumber</button>
-                <button type="button" class="chip" data-niche="Electrician">Electrician</button>
-                <button type="button" class="chip" data-niche="Dentist">Dentist</button>
-                <button type="button" class="chip" data-niche="Roofer">Roofer</button>
-                <button type="button" class="chip" data-niche="HVAC">HVAC</button>
-                <button type="button" class="chip" data-niche="Restaurant">Restaurant</button>
-                <button type="button" class="chip" data-niche="Solar Energy">Solar Energy</button>
-                <button type="button" class="chip" data-niche="Auto Repair">Auto Repair</button>
-                <button type="button" class="chip" data-niche="Real Estate">Real Estate</button>
-              </div>
+          <!-- Location Row -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="select-country">Country</label>
+              <select id="select-country">
+                <option value="United_States" selected>🇺🇸 United States</option>
+                <option value="France">🇫🇷 France</option>
+                <option value="Morocco">🇲🇦 Morocco</option>
+                <option value="United_Kingdom">🇬🇧 United Kingdom</option>
+                <option value="Canada">🇨🇦 Canada</option>
+                <option value="Switzerland">🇨🇭 Switzerland</option>
+                <option value="custom">🌍 Custom Location</option>
+              </select>
             </div>
 
-            <!-- Country & City Selection -->
-            <div class="form-row">
-              <div class="form-group flex-1">
-                <label for="select-country"><i data-lucide="globe"></i> Country Preset</label>
-                <select id="select-country">
-                  <option value="United_States" selected>🇺🇸 United States</option>
-                  <option value="France">🇫🇷 France</option>
-                  <option value="Morocco">🇲🇦 Morocco</option>
-                  <option value="United_Kingdom">🇬🇧 United Kingdom</option>
-                  <option value="Canada">🇨🇦 Canada</option>
-                  <option value="Switzerland">🇨🇭 Switzerland</option>
-                  <option value="custom">🌍 Custom Country</option>
-                </select>
-              </div>
-
-              <div class="form-group flex-2">
-                <div class="label-row">
-                  <label for="input-city"><i data-lucide="map-pin"></i> Target City</label>
-                  <span class="label-sub">Blank = all target cities</span>
-                </div>
-                <input type="text" id="input-city" placeholder="e.g. Austin, Lyon, Casablanca..." value="Austin">
-              </div>
+            <div class="form-group flex-2">
+              <label for="input-city">City <span class="label-sub">(Blank = all country cities)</span></label>
+              <input type="text" id="input-city" placeholder="e.g. Austin, Lyon, Casablanca" value="Austin">
             </div>
+          </div>
 
-            <!-- City Quick Chips (dynamically updated) -->
-            <div class="form-group">
-              <div class="city-chips-label">Quick City Presets:</div>
-              <div class="chips-container" id="city-chips">
-                <!-- Injected via JS -->
-              </div>
+          <!-- City Chips -->
+          <div class="form-group">
+            <div class="chips-row" id="city-chips">
+              <!-- Injected by JS -->
             </div>
+          </div>
 
-            <!-- Depth / Scroll Limit Slider -->
-            <div class="form-group slider-group">
-              <div class="label-row">
-                <label for="input-depth"><i data-lucide="layers"></i> Scroll Depth (Leads per city)</label>
-                <span class="slider-val" id="depth-val">20</span>
-              </div>
-              <input type="range" id="input-depth" min="10" max="100" step="5" value="20">
-              <div class="slider-ticks">
-                <span>10 (Fast test)</span>
-                <span>30 (Standard)</span>
-                <span>60 (Deep)</span>
-                <span>100 (Max)</span>
-              </div>
+          <!-- Depth Slider -->
+          <div class="form-group">
+            <div class="slider-header">
+              <label for="input-depth">Scroll Depth</label>
+              <span class="badge-depth"><span id="depth-val">20</span> leads</span>
             </div>
-
-            <!-- Options / Toggles -->
-            <div class="toggles-grid">
-              <div class="toggle-card">
-                <div class="toggle-info">
-                  <div class="toggle-title">
-                    <i data-lucide="mail-search"></i>
-                    <span>Email Enrichment</span>
-                  </div>
-                  <p>Crawls business websites for contact emails</p>
-                </div>
-                <label class="switch">
-                  <input type="checkbox" id="toggle-enrich" checked>
-                  <span class="slider round"></span>
-                </label>
-              </div>
-
-              <div class="toggle-card">
-                <div class="toggle-info">
-                  <div class="toggle-title">
-                    <i data-lucide="send"></i>
-                    <span>Auto-Push to n8n</span>
-                  </div>
-                  <p>Triggers cold email campaign immediately</p>
-                </div>
-                <label class="switch">
-                  <input type="checkbox" id="toggle-n8n" checked>
-                  <span class="slider round"></span>
-                </label>
-              </div>
+            <input type="range" id="input-depth" min="10" max="100" step="5" value="20" class="clean-slider">
+            <div class="slider-markers">
+              <span>10 (Fast)</span>
+              <span>30 (Standard)</span>
+              <span>60 (Deep)</span>
+              <span>100 (Max)</span>
             </div>
+          </div>
 
-            <!-- Submit Button -->
-            <button type="submit" id="btn-launch" class="btn btn-primary btn-large btn-glow">
-              <i data-lucide="rocket"></i>
-              <span>Launch Cloud Scrape & Outreach</span>
-            </button>
-          </form>
-        </div>
-      </section>
+          <!-- Clean Toggles -->
+          <div class="toggles-row">
+            <label class="toggle-item">
+              <input type="checkbox" id="toggle-enrich" checked>
+              <div class="toggle-track"></div>
+              <div class="toggle-label">
+                <strong>Email Verification</strong>
+                <span>Filter MX & Deliverability</span>
+              </div>
+            </label>
 
-      <!-- Right Column: Status, Active Runs & Quick Stats -->
-      <section class="monitor-section">
-        <!-- Brevo Email Quota Monitor Card -->
-        <div class="card glass-panel quota-monitor-card">
+            <label class="toggle-item">
+              <input type="checkbox" id="toggle-n8n" checked>
+              <div class="toggle-track"></div>
+              <div class="toggle-label">
+                <strong>Push to n8n</strong>
+                <span>Trigger Outreach Webhook</span>
+              </div>
+            </label>
+          </div>
+
+          <!-- Launch Button -->
+          <button type="submit" id="btn-launch" class="btn btn-primary btn-launch">
+            <i data-lucide="play"></i>
+            <span>Launch Cloud Pipeline</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Right: Real-time Monitor & Quotas -->
+      <div class="side-column">
+        <!-- Brevo Quota Card -->
+        <div class="card card-quota">
           <div class="card-header">
-            <div class="card-title-wrap">
-              <i data-lucide="mail-check" class="text-accent"></i>
-              <h3>Brevo Daily Email Quota</h3>
+            <div class="card-title">
+              <i data-lucide="mail-check" class="icon-accent"></i>
+              <h3>Daily Email Balance</h3>
             </div>
-            <div class="header-right-tools">
-              <span id="quota-status-badge" class="badge badge-success"><span class="pulse-dot"></span> Ready</span>
-              <button id="btn-refresh-quota" class="btn btn-ghost btn-sm btn-icon" title="Refresh Brevo balance">
+            <div class="quota-actions">
+              <button id="btn-refresh-quota" class="btn-icon" title="Refresh balance">
                 <i data-lucide="refresh-cw"></i>
               </button>
             </div>
           </div>
 
-          <div class="quota-body">
-            <div class="quota-stats-grid">
-              <div class="quota-stat-box">
-                <span class="stat-label">Remaining Today</span>
-                <div class="stat-value text-glow" id="quota-remaining-val">300</div>
-                <span class="stat-sub">of 300 Free Plan</span>
-              </div>
-              <div class="quota-stat-box">
-                <span class="stat-label">Safe Cap</span>
-                <div class="stat-value" id="quota-cap-val">280</div>
-                <span class="stat-sub">n8n Safe Limit</span>
-              </div>
-              <div class="quota-stat-box">
-                <span class="stat-label">Estimated Sent</span>
-                <div class="stat-value" id="quota-sent-val">0</div>
-                <span class="stat-sub">Today</span>
-              </div>
+          <div class="quota-stats">
+            <div class="quota-item">
+              <span class="quota-number" id="quota-remaining-val">300</span>
+              <span class="quota-caption">Remaining Today</span>
             </div>
+            <div class="quota-divider"></div>
+            <div class="quota-item">
+              <span class="quota-number" id="quota-cap-val">280</span>
+              <span class="quota-caption">Safe Cap Limit</span>
+            </div>
+            <div class="quota-divider"></div>
+            <div class="quota-item">
+              <span class="quota-number" id="quota-sent-val">0</span>
+              <span class="quota-caption">Sent Today</span>
+            </div>
+          </div>
 
-            <!-- Progress Bar -->
-            <div class="quota-progress-wrap">
-              <div class="quota-progress-labels">
-                <span>Daily Consumption</span>
-                <span id="quota-percent-val">0%</span>
-              </div>
-              <div class="quota-progress-track">
-                <div class="quota-progress-bar" id="quota-progress-bar" style="width: 0%;"></div>
-              </div>
-            </div>
+          <div class="quota-bar-wrap">
+            <div class="quota-bar-fill" id="quota-progress-bar" style="width: 0%;"></div>
+          </div>
 
-            <div class="quota-footer-info">
-              <div class="reset-timer-wrap">
-                <i data-lucide="clock" style="width: 14px; height: 14px;"></i>
-                <span id="quota-reset-countdown">Resets at 00:00 UTC</span>
-              </div>
-              <div id="brevo-api-status-note" class="api-note">
-                <a href="#" id="link-configure-brevo" class="link-highlight">Connect API Key</a>
-              </div>
-            </div>
+          <div class="quota-meta">
+            <span id="quota-reset-countdown"><i data-lucide="clock"></i> Resets at 00:00 UTC</span>
+            <span id="brevo-api-status-note">
+              <a href="#" id="link-configure-brevo" class="link-sub">Set Brevo Key</a>
+            </span>
           </div>
         </div>
 
-        <!-- Live Runs Card -->
-        <div class="card glass-panel">
+        <!-- Live Executions Card -->
+        <div class="card card-runs">
           <div class="card-header">
-            <div class="card-title-wrap">
-              <span class="step-num">2</span>
-              <h2>Live Cloud Executions</h2>
+            <div class="card-title">
+              <i data-lucide="activity" class="icon-accent"></i>
+              <h3>Recent Cloud Runs</h3>
             </div>
-            <button id="btn-refresh-runs" class="btn btn-ghost btn-sm btn-icon" title="Refresh runs">
+            <button id="btn-refresh-runs" class="btn-icon" title="Refresh runs">
               <i data-lucide="refresh-cw"></i>
-              <span>Refresh</span>
             </button>
           </div>
 
-          <div id="runs-container" class="runs-container">
+          <div id="runs-container" class="runs-list">
             <div class="empty-runs">
-              <i data-lucide="inbox"></i>
-              <p>No recent executions loaded.<br>Click <strong>Refresh</strong> or launch a new run.</p>
+              <p>No recent executions loaded.<br>Click refresh to fetch status.</p>
             </div>
           </div>
         </div>
 
-        <!-- Pipeline Status Summary -->
-        <div class="card glass-panel stats-card">
-          <div class="card-header">
-            <div class="card-title-wrap">
-              <i data-lucide="activity" class="text-accent"></i>
-              <h3>Pipeline Integrations</h3>
+        <!-- System Pipeline Status -->
+        <div class="card card-status">
+          <div class="status-row">
+            <div class="status-meta">
+              <span class="status-dot dot-online"></span>
+              <span><strong>n8n Webhook:</strong> <code>/webhook/leads</code></span>
             </div>
-          </div>
-
-          <div class="integrations-list">
-            <div class="integration-item">
-              <div class="integration-icon git-icon">
-                <i data-lucide="github"></i>
-              </div>
-              <div class="integration-details">
-                <div class="integration-name">GitHub Actions Cloud Runner</div>
-                <div class="integration-meta">Repo: <code>aymanehbich/gmapsscraper</code></div>
-              </div>
-              <span class="badge badge-success"><i data-lucide="check-circle-2"></i> Connected</span>
-            </div>
-
-            <div class="integration-item">
-              <div class="integration-icon n8n-icon">
-                <i data-lucide="workflow"></i>
-              </div>
-              <div class="integration-details">
-                <div class="integration-name">n8n Cold Email Pipeline</div>
-                <div class="integration-meta">Path: <code>/webhook/leads</code> (Zoho SMTP + Sheets)</div>
-              </div>
-              <a href="https://aymane-hbich-n8n-c2967382a5d9.herokuapp.com" target="_blank" rel="noopener" class="badge badge-outline">
-                <span>Open n8n</span>
-                <i data-lucide="external-link"></i>
-              </a>
-            </div>
+            <a href="https://aymane-hbich-n8n-c2967382a5d9.herokuapp.com" target="_blank" rel="noopener" class="link-sub">
+              Open n8n &rarr;
+            </a>
           </div>
         </div>
-      </section>
+      </div>
     </main>
   </div>
 
-  <!-- Toast Notification Container -->
+  <!-- Toast Notifications -->
   <div id="toast-container" class="toast-container"></div>
 
   <script src="app.js"></script>
