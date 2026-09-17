@@ -201,11 +201,13 @@ def fetch_emails_from_website(website_url: str, timeout: int = 7) -> list:
         except Exception:
             pass
 
-    # Perform Deep Deliverability & MX Verification on all found candidate emails
+    # Retain all found candidate emails
     if emails:
         valid_deliverable = filter_valid_emails(list(emails))
+        print(f"  [+] {website_url} -> Found emails: {valid_deliverable}", flush=True)
         return valid_deliverable
 
+    print(f"  [-] {website_url} -> No email found on website", flush=True)
     return []
 
 

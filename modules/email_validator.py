@@ -197,39 +197,27 @@ def check_smtp_mailbox(mx_host: str, recipient_email: str, timeout: float = 2.0)
 
 
 def verify_email(email: str, perform_smtp_check: bool = False) -> bool:
+def verify_email(email: str, perform_smtp_check: bool = False) -> bool:
     """
-    Multi-layer deliverability verification:
-    1. Syntax & Junk filter (fast, precise)
-    2. DNS MX / Host record lookup (with Google DNS fallback)
-    3. Optional SMTP handshake (non-blocking)
+    Validator Bypass Mode:
+    Keeps all found emails that have a valid basic format (local@domain.tld)
+    without dropping on DNS/MX or SMTP checks.
     """
-    if not is_clean_syntax(email):
+    if not email or not isinstance(email, str):
         return False
-
-    clean_email = sanitize_email_candidate(email)
-    parts = clean_email.split('@')
-    if len(parts) != 2:
+    clean = sanitize_email_candidate(email)
+    if '@' not in clean or '.' not in clean.split('@')[-1]:
         return False
-    domain = parts[1]
-
-    # Layer 2: DNS MX / A Records
-    mx_records = get_mx_records(domain)
-    if not mx_records:
+    # Only drop known junk image/script extensions
+    if any(clean.endswith(ext) for ext in JUNK_EXTENSIONS):
         return False
-
-    # Layer 3: Optional SMTP Handshake
-    if perform_smtp_check and mx_records:
-        primary_mx = mx_records[0]
-        is_mailbox_active = check_smtp_mailbox(primary_mx, clean_email)
-        if not is_mailbox_active:
-            return False
-
     return True
 
 
 def filter_valid_emails(emails: list) -> list:
     """
-    Takes a list of candidate emails and returns only verified deliverable ones.
+    Takes candidate emails and retains all raw extracted emails (deduplicated).
+    Prints found emails for full transparency in logs.
     """
     valid = []
     seen = set()
@@ -242,4 +230,5 @@ def filter_valid_emails(emails: list) -> list:
         if verify_email(cleaned):
             valid.append(cleaned)
             seen.add(cleaned)
+            print(f"  --> [VALIDATOR ACCEPTED]: {cleaned}", flush=True)
     return valid

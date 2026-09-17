@@ -79,7 +79,7 @@ def clean_and_deduplicate_leads(input_file, output_file, default_city=None, defa
           "category": category,
           "phone": item.get("phone"),
           "emails": emails_list,
-          "website": item.get("web_site"),
+          "website": item.get("web_site") or item.get("website") or item.get("site") or item.get("url") or item.get("link"),
           "address": address,
           "city": city,
           "state": state,
