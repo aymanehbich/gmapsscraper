@@ -102,10 +102,12 @@ def is_clean_syntax(email: str) -> bool:
     return True
 
 
-def get_mx_records(domain: str, timeout: float = 2.5):
+def get_mx_records(domain: str, timeout: float = 2.0):
     """
     Fetches DNS MX records for domain.
-    Falls back to domain A/AAAA records under RFC 5321 when no MX is defined.
+    1. Uses system resolver first (works in all CI/CD, local, and restricted environments).
+    2. Falls back to public DNS if system resolver fails.
+    3. Falls back to host IP resolution (A/AAAA records under RFC 5321).
     Caches results in _MX_CACHE for high performance.
     """
     domain = domain.lower().strip()
@@ -114,30 +116,44 @@ def get_mx_records(domain: str, timeout: float = 2.5):
 
     mx_hosts = []
 
-    # 1. Try dnspython MX lookup with fallback DNS servers
+    # 1. Try dnspython with System Default Resolver
     try:
         import dns.resolver
         resolver = dns.resolver.Resolver()
-        resolver.nameservers = ['8.8.8.8', '1.1.1.1', '8.8.4.4']
         resolver.lifetime = timeout
         resolver.timeout = timeout
-        answers = resolver.resolve(domain, 'MX')
-        mx_hosts = [str(r.exchange).rstrip('.') for r in answers]
-    except Exception:
-        # Fallback to checking standard A record resolution
         try:
-            import dns.resolver
-            resolver = dns.resolver.Resolver()
-            resolver.nameservers = ['8.8.8.8', '1.1.1.1']
-            resolver.lifetime = timeout
-            resolver.timeout = timeout
-            answers = resolver.resolve(domain, 'A')
-            if answers:
-                mx_hosts = [domain]
-        except Exception:
-            # Fallback to standard socket getaddrinfo
+            answers = resolver.resolve(domain, 'MX')
+            mx_hosts = [str(r.exchange).rstrip('.') for r in answers]
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+            # Domain exists or no MX -> try A record on domain
             try:
-                socket.getaddrinfo(domain, 80, proto=socket.IPPROTO_TCP)
+                a_answers = resolver.resolve(domain, 'A')
+                if a_answers:
+                    mx_hosts = [domain]
+            except Exception:
+                mx_hosts = []
+        except Exception:
+            # Fallback to public DNS if system resolver failed or timed out
+            try:
+                resolver.nameservers = ['8.8.8.8', '1.1.1.1']
+                answers = resolver.resolve(domain, 'MX')
+                mx_hosts = [str(r.exchange).rstrip('.') for r in answers]
+            except Exception:
+                mx_hosts = []
+    except Exception:
+        pass
+
+    # 2. Universal Socket Fallback (works when dnspython is absent or DNS port 53 is firewalled)
+    if not mx_hosts:
+        try:
+            # gethostbyname checks system hosts/DNS cache without binding to specific port
+            socket.gethostbyname(domain)
+            mx_hosts = [domain]
+        except Exception:
+            try:
+                # Also check www. subdomain if apex domain doesn't resolve
+                socket.gethostbyname('www.' + domain)
                 mx_hosts = [domain]
             except Exception:
                 mx_hosts = []

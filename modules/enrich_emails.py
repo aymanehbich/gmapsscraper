@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import html
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, urljoin, unquote
@@ -8,24 +9,53 @@ import requests
 from bs4 import BeautifulSoup
 
 try:
-    from modules.email_validator import verify_email, filter_valid_emails, is_clean_syntax
+    from modules.email_validator import verify_email, filter_valid_emails, is_clean_syntax, sanitize_email_candidate
 except ImportError:
-    from email_validator import verify_email, filter_valid_emails, is_clean_syntax
+    from email_validator import verify_email, filter_valid_emails, is_clean_syntax, sanitize_email_candidate
 
 HEADERS = {
     'User-Agent': (
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
         'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/120.0.0.0 Safari/537.36'
+        'Chrome/124.0.0.0 Safari/537.36'
     ),
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Language': 'fr-FR,fr;q=0.9,en-US,en;q=0.8',
 }
 
 EMAIL_REGEX = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', re.IGNORECASE)
 
+# Domains to skip crawling (social media, platforms, directory portals)
+SKIP_DOMAINS = {
+    'facebook.com', 'instagram.com', 'tiktok.com', 'twitter.com', 'x.com',
+    'linkedin.com', 'youtube.com', 'pinterest.com', 'dabadoc.com', 'doctolib.fr',
+    'wa.me', 'whatsapp.com', 'google.com', 'maps.google.com', 'waze.com',
+    'yelp.com', 'tripadvisor.com', 'pagesjaunes.fr', 'telecontact.ma'
+}
 
-def clean_url(url):
+# Multilingual keywords for high-priority subpages (French, English, Spanish)
+CONTACT_SUBPAGE_KEYWORDS = [
+    'contact', 'contactez', 'contacter', 'nous-contacter', 'contact-us',
+    'a-propos', 'apropos', 'qui-sommes-nous', 'about', 'about-us',
+    'mentions-legales', 'mentions', 'legal', 'impressum', 'politique-de-confidentialite',
+    'notre-equipe', 'equipe', 'le-cabinet', 'cabinet', 'team',
+    'rdv', 'rendez-vous', 'prendre-rendez-vous', 'rendezvous', 'booking'
+]
+
+
+def decode_cf_email(cf_hex: str) -> str:
+    """Decodes Cloudflare email obfuscation (data-cfemail or /cdn-cgi/l/email-protection#...)."""
+    try:
+        if not cf_hex or len(cf_hex) < 4:
+            return ""
+        r = int(cf_hex[:2], 16)
+        email = ''.join([chr(int(cf_hex[i:i+2], 16) ^ r) for i in range(2, len(cf_hex), 2)])
+        return email.strip()
+    except Exception:
+        return ""
+
+
+def clean_url(url: str):
     if not url:
         return None
     url = url.strip()
@@ -34,53 +64,84 @@ def clean_url(url):
     return url
 
 
-def extract_emails_from_html(html_content):
+def is_crawlable_domain(netloc: str) -> bool:
+    """Returns False for social networks, chat apps, and directory aggregators."""
+    if not netloc:
+        return False
+    clean_host = netloc.lower().split(':')[0]
+    for skip in SKIP_DOMAINS:
+        if clean_host == skip or clean_host.endswith('.' + skip):
+            return False
+    return True
+
+
+def extract_emails_from_html(html_content: str) -> set:
     found = set()
     if not html_content:
         return found
-    
-    # 1. Regex find directly in raw text
-    for raw_match in EMAIL_REGEX.findall(html_content):
-        decoded = unquote(raw_match).strip().lower()
-        if is_clean_syntax(decoded):
-            found.add(decoded)
 
-    # 2. BeautifulSoup mailto: links
+    # Unescape HTML entities (e.g. &#64; -> @) and URL encoding
+    decoded_html = html.unescape(unquote(html_content))
+
+    # 1. Regex search across raw HTML
+    for raw_match in EMAIL_REGEX.findall(decoded_html):
+        clean = sanitize_email_candidate(raw_match)
+        if is_clean_syntax(clean):
+            found.add(clean)
+
+    # 2. BeautifulSoup parsing for mailto, Cloudflare, and DOM links
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
-        for a_tag in soup.find_all('a', href=True):
-            href = a_tag['href']
-            if href.lower().startswith('mailto:'):
-                email = href.split('mailto:')[1].split('?')[0].strip()
-                decoded = unquote(email).lower()
-                if is_clean_syntax(decoded):
-                    found.add(decoded)
-    except Exception:
-        pass
 
-    # 3. Hidden comments, script tags or metadata
-    try:
-        if not soup:
-            soup = BeautifulSoup(html_content, 'html.parser')
+        # Check Cloudflare protected emails: <span data-cfemail="..."> or <a href="/cdn-cgi/l/email-protection#...">
+        for cf_tag in soup.find_all(attrs={"data-cfemail": True}):
+            cf_val = cf_tag.get("data-cfemail")
+            decoded_cf = decode_cf_email(cf_val)
+            if decoded_cf and is_clean_syntax(decoded_cf):
+                found.add(sanitize_email_candidate(decoded_cf))
+
+        # Check hrefs
+        for a_tag in soup.find_all('a', href=True):
+            href = a_tag['href'].strip()
+
+            # Mailto links
+            if href.lower().startswith('mailto:'):
+                email = href.split('mailto:')[1].split('?')[0].split('&')[0].strip()
+                clean = sanitize_email_candidate(email)
+                if is_clean_syntax(clean):
+                    found.add(clean)
+
+            # Cloudflare email protection link URL
+            if '/email-protection#' in href:
+                cf_hex = href.split('/email-protection#')[-1].split('?')[0]
+                decoded_cf = decode_cf_email(cf_hex)
+                if decoded_cf and is_clean_syntax(decoded_cf):
+                    found.add(sanitize_email_candidate(decoded_cf))
+
+        # Check stripped text strings
         for text in soup.stripped_strings:
-            for match in EMAIL_REGEX.findall(text):
-                decoded = unquote(match).strip().lower()
-                if is_clean_syntax(decoded):
-                    found.add(decoded)
+            for match in EMAIL_REGEX.findall(html.unescape(text)):
+                clean = sanitize_email_candidate(match)
+                if is_clean_syntax(clean):
+                    found.add(clean)
+
     except Exception:
         pass
 
     return found
 
 
-def fetch_emails_from_website(website_url, timeout=7):
+def fetch_emails_from_website(website_url: str, timeout: int = 7) -> list:
     emails = set()
     url = clean_url(website_url)
     if not url:
         return []
 
     try:
-        domain = urlparse(url).netloc
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        if not is_crawlable_domain(domain):
+            return []
     except Exception:
         return []
 
@@ -88,41 +149,57 @@ def fetch_emails_from_website(website_url, timeout=7):
     session.headers.update(HEADERS)
 
     # 1. Scrape Homepage
+    homepage_html = None
     try:
         resp = session.get(url, timeout=timeout, verify=False, allow_redirects=True)
         if resp.status_code == 200:
-            emails.update(extract_emails_from_html(resp.text))
-            
-            # If no email on homepage, look for Contact / About subpages
-            if not emails:
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                contact_links = []
-                for a in soup.find_all('a', href=True):
-                    href = a['href'].strip()
-                    text = a.get_text().lower()
-                    
-                    # Target contact/about pages
-                    if any(k in href.lower() or k in text for k in ['contact', 'about', 'reach', 'team', 'support', 'impressum']):
-                        full_url = urljoin(url, href)
-                        # Keep within same domain
-                        if urlparse(full_url).netloc == domain and full_url not in contact_links:
-                            contact_links.append(full_url)
-                            if len(contact_links) >= 3:  # Limit subpages to keep speed fast
-                                break
-                
-                # Scrape candidate contact pages
-                for c_url in contact_links:
+            homepage_html = resp.text
+            emails.update(extract_emails_from_html(homepage_html))
+    except Exception:
+        pass
+
+    # 2. If no email found on homepage, discover and crawl contact / about subpages
+    if not emails and homepage_html:
+        try:
+            soup = BeautifulSoup(homepage_html, 'html.parser')
+            contact_links = []
+            seen_urls = {url.rstrip('/')}
+
+            for a in soup.find_all('a', href=True):
+                href = a['href'].strip()
+                text = a.get_text().strip().lower()
+                href_lower = href.lower()
+
+                # Check if link or anchor text matches any contact keyword
+                matches_keyword = any(k in href_lower or k in text for k in CONTACT_SUBPAGE_KEYWORDS)
+
+                if matches_keyword:
+                    full_url = urljoin(url, href).split('#')[0].rstrip('/')
                     try:
-                        c_resp = session.get(c_url, timeout=timeout, verify=False)
-                        if c_resp.status_code == 200:
-                            c_emails = extract_emails_from_html(c_resp.text)
-                            emails.update(c_emails)
-                            if emails:  # Stop searching subpages once an email is found
+                        link_domain = urlparse(full_url).netloc.lower()
+                        # Ensure subpage stays within same business domain
+                        if (link_domain == domain or link_domain.endswith('.' + domain)) and full_url not in seen_urls:
+                            seen_urls.add(full_url)
+                            contact_links.append(full_url)
+                            if len(contact_links) >= 4:  # Crawl up to 4 relevant subpages
                                 break
                     except Exception:
                         continue
-    except Exception:
-        pass
+
+            # Crawl subpages
+            for c_url in contact_links:
+                try:
+                    c_resp = session.get(c_url, timeout=timeout, verify=False, allow_redirects=True)
+                    if c_resp.status_code == 200:
+                        c_emails = extract_emails_from_html(c_resp.text)
+                        emails.update(c_emails)
+                        if emails:  # Stop searching once an email is discovered
+                            break
+                except Exception:
+                    continue
+
+        except Exception:
+            pass
 
     # Perform Deep Deliverability & MX Verification on all found candidate emails
     if emails:
@@ -132,7 +209,7 @@ def fetch_emails_from_website(website_url, timeout=7):
     return []
 
 
-def process_lead(lead, timeout):
+def process_lead(lead: dict, timeout: int):
     existing_emails = lead.get('emails', []) or []
     website = lead.get('website')
 
@@ -149,7 +226,6 @@ def process_lead(lead, timeout):
     found_emails = fetch_emails_from_website(website, timeout=timeout)
     if found_emails:
         combined = list(dict.fromkeys(existing_emails + found_emails))
-        # Keep strictly deliverable emails
         valid_combined = filter_valid_emails(combined)
         lead['emails'] = valid_combined
         return lead, len(valid_combined)
@@ -157,7 +233,7 @@ def process_lead(lead, timeout):
     return lead, 0
 
 
-def enrich_file(json_filepath, max_workers=12, timeout=7):
+def enrich_file(json_filepath: str, max_workers: int = 12, timeout: int = 7):
     if not os.path.exists(json_filepath):
         print(f"File not found: {json_filepath}", flush=True)
         return
@@ -172,14 +248,14 @@ def enrich_file(json_filepath, max_workers=12, timeout=7):
 
     total_leads = len(leads)
     indices_to_enrich = [i for i, l in enumerate(leads) if not l.get('emails') and l.get('website')]
-    
+
     print(f"Total leads: {total_leads} | Leads needing emails: {len(indices_to_enrich)}", flush=True)
 
     if not indices_to_enrich:
         print("All leads already have emails or no websites available.", flush=True)
         return
 
-    # Disable SSL warnings for scraper requests
+    # Disable SSL warnings for crawler requests
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -203,7 +279,7 @@ def enrich_file(json_filepath, max_workers=12, timeout=7):
                 if count > 0:
                     enriched_count += 1
                     new_emails_found += count
-            except Exception as e:
+            except Exception:
                 pass
 
             if completed % 5 == 0 or completed == total_to_process:
