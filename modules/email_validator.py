@@ -197,7 +197,6 @@ def check_smtp_mailbox(mx_host: str, recipient_email: str, timeout: float = 2.0)
 
 
 def verify_email(email: str, perform_smtp_check: bool = False) -> bool:
-def verify_email(email: str, perform_smtp_check: bool = False) -> bool:
     """
     Validator Bypass Mode:
     Keeps all found emails that have a valid basic format (local@domain.tld)
