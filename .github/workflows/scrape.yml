@@ -65,18 +65,12 @@ jobs:
         run: |
           if [ -n "$PROXIES_SECRET" ]; then
             echo "$PROXIES_SECRET" > proxies.txt
-            echo "Proxies loaded successfully into proxies.txt ($(wc -l < proxies.txt) lines)."
+            echo "Loaded proxies.txt from GitHub Secrets."
           else
-            echo "No PROXIES_TXT secret found in repository settings."
+            echo "No PROXIES_TXT secret found."
           fi
 
-      - name: 6. Clean Old Output Directories
-        run: |
-          echo "Cleaning previous output files..."
-          rm -rf output
-          mkdir -p output
-
-      - name: 7. Run Google Maps Scraper Orchestrator
+      - name: 6. Run Google Maps Scraper Orchestrator
         run: |
           set -e
           CMD="python run_scraper.py --niche \"${{ inputs.niche }}\" --depth ${{ inputs.depth }}"
@@ -92,7 +86,7 @@ jobs:
           echo "Executing: $CMD"
           eval $CMD
 
-      - name: 8. Push Slim Leads from THIS RUN to n8n Webhook
+      - name: 7. Push Slim Leads Directly to n8n Webhook
         if: ${{ inputs.send_to_n8n == true || inputs.send_to_n8n == 'true' }}
         run: |
           python -c "
@@ -108,7 +102,7 @@ jobs:
 
           print(f'Total leads scraped in this run: {len(all_leads)}')
 
-          # Filter leads with emails
+          # Filter and slim (remove heavy reviews to make it fast & lightweight)
           slim_leads = []
           for lead in all_leads:
               raw_emails = lead.get('emails', [])
@@ -135,17 +129,17 @@ jobs:
                   'phone': lead.get('phone')
               })
 
-          print(f'Valid leads with deliverable emails ready for n8n: {len(slim_leads)}')
+          print(f'Valid leads with emails ready for n8n: {len(slim_leads)}')
 
           if slim_leads:
               webhook_url = 'https://aymane-hbich-n8n-c2967382a5d9.herokuapp.com/webhook/leads'
               res = requests.post(webhook_url, json=slim_leads)
               print(f'n8n Webhook Response: {res.status_code} - {res.text}')
           else:
-              print('No leads with emails found in this run.')
+              print('No valid leads with emails found in this run.')
           "
 
-      - name: 9. Save Leads as GitHub Artifact (Backup)
+      - name: 8. Save Leads as GitHub Artifact (Backup)
         uses: actions/upload-artifact@v4
         with:
           name: gmaps-leads-${{ inputs.niche }}-${{ inputs.city }}
