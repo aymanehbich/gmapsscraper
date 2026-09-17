@@ -126,8 +126,11 @@ def run_scraper():
                 continue
 
             # Write temporary query file inside the target directory
-            # Format: "[Keyword] [prep] [City], [Country]" (e.g. "plombier à Rabat, Maroc")
-            query_str = f"{keyword} {prep} {city}, {country_display}"
+            # Format: "[Keyword] [prep] [City]" or "[Keyword] [prep] [City], [Country]"
+            if country_display and country_display != "Location":
+                query_str = f"{keyword} {prep} {city}, {country_display}"
+            else:
+                query_str = f"{keyword} {prep} {city}"
             temp_queries_file = os.path.join(dir_path, "queries_temp.txt")
             with open(temp_queries_file, "w", encoding="utf-8") as qf:
                 qf.write(query_str + "\n")

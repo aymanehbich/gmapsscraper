@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import html
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, urljoin, unquote
@@ -11,10 +12,10 @@ HEADERS = {
     'User-Agent': (
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
         'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/120.0.0.0 Safari/537.36'
+        'Chrome/124.0.0.0 Safari/537.36'
     ),
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Language': 'fr-FR,fr;q=0.9,en-US,en;q=0.8',
 }
 
 EMAIL_REGEX = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', re.IGNORECASE)
@@ -24,7 +25,28 @@ JUNK_EXTENSIONS = (
     '.css', '.js', '.pdf', '.zip', '.tar', '.gz', '.woff', '.woff2', '.ttf'
 )
 
-JUNK_PATTERNS = ('sentry', 'wixpress', 'schema.org', 'elementor', 'bootstrap', 'themeforest', 'fontawesome')
+DUMMY_EMAILS = {
+    'example@email.com', 'example@gmail.com', 'example@example.com',
+    'votre@email.com', 'votre-email@domaine.com', 'name@email.com',
+    'info@mysite.com', 'user@domain.com', 'test@test.com', 'email@example.com'
+}
+
+CONTACT_KEYWORDS = [
+    'contact', 'contactez', 'nous-contacter', 'reach', 'touch', 'about',
+    'propos', 'qui-sommes-nous', 'mentions', 'legal', 'support', 'help',
+    'team', 'equipe', 'rdv', 'appointment', 'info', 'service'
+]
+
+
+def decode_cf_email(cf_hex: str) -> str:
+    """Decodes Cloudflare email obfuscation."""
+    try:
+        if not cf_hex or len(cf_hex) < 4:
+            return ""
+        r = int(cf_hex[:2], 16)
+        return ''.join([chr(int(cf_hex[i:i+2], 16) ^ r) for i in range(2, len(cf_hex), 2)]).strip()
+    except Exception:
+        return ""
 
 
 def clean_url(url):
@@ -39,18 +61,19 @@ def clean_url(url):
 def is_valid_email(email):
     if not email:
         return False
-    email_clean = unquote(email).strip().lower().lstrip('.')
+    email_clean = unquote(email).strip().lower().strip("\"'<>[](){}:;, \t\r\n").lstrip('.')
     if any(email_clean.endswith(ext) for ext in JUNK_EXTENSIONS):
         return False
-    if any(junk in email_clean for junk in JUNK_PATTERNS):
-        return False
-    if email_clean in ('example@gmail.com', 'info@mysite.com', 'user@domain.com', 'test@test.com'):
+    if email_clean in DUMMY_EMAILS:
         return False
     parts = email_clean.split('@')
     if len(parts) != 2:
         return False
-    domain_parts = parts[1].split('.')
-    if len(domain_parts) < 2 or len(domain_parts[-1]) < 2:
+    local, domain = parts[0], parts[1]
+    if len(local) < 1 or '.' not in domain:
+        return False
+    domain_parts = domain.split('.')
+    if len(domain_parts[-1]) < 2:
         return False
     return True
 
@@ -60,22 +83,37 @@ def extract_emails_from_html(html_content):
     if not html_content:
         return found
     
-    # 1. Regex find directly in raw text
-    for raw_match in EMAIL_REGEX.findall(html_content):
-        decoded = unquote(raw_match).strip().lower()
-        if is_valid_email(decoded):
-            found.add(decoded)
+    # 1. Unescape HTML entities (&#64; -> @)
+    decoded_html = html.unescape(unquote(html_content))
 
-    # 2. BeautifulSoup mailto: links
+    # 2. Regex find in raw HTML
+    for raw_match in EMAIL_REGEX.findall(decoded_html):
+        clean = unquote(raw_match).strip().lower()
+        if is_valid_email(clean):
+            found.add(clean)
+
+    # 3. BeautifulSoup parsing for mailto, Cloudflare, and links
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Cloudflare data-cfemail
+        for cf_tag in soup.find_all(attrs={"data-cfemail": True}):
+            decoded_cf = decode_cf_email(cf_tag.get("data-cfemail"))
+            if is_valid_email(decoded_cf):
+                found.add(decoded_cf.lower())
+
         for a_tag in soup.find_all('a', href=True):
-            href = a_tag['href']
+            href = a_tag['href'].strip()
             if href.lower().startswith('mailto:'):
                 email = href.split('mailto:')[1].split('?')[0].split('&')[0].strip()
-                decoded = unquote(email).lower()
-                if is_valid_email(decoded):
-                    found.add(decoded)
+                clean = unquote(email).lower()
+                if is_valid_email(clean):
+                    found.add(clean)
+            elif '/email-protection#' in href:
+                cf_hex = href.split('/email-protection#')[-1].split('?')[0]
+                decoded_cf = decode_cf_email(cf_hex)
+                if is_valid_email(decoded_cf):
+                    found.add(decoded_cf.lower())
     except Exception:
         pass
 
@@ -87,23 +125,24 @@ def find_contact_links(soup, base_url):
     if not soup:
         return contact_urls
 
-    keywords = [
-        'contact', 'contactez', 'nous-contacter', 'reach', 'touch', 'about', 'propos',
-        'qui-sommes-nous', 'mentions', 'legal', 'support', 'help', 'team', 'equipe', 'rdv'
-    ]
-    
+    base_netloc = urlparse(base_url).netloc.lower().replace('www.', '')
+
     for a_tag in soup.find_all('a', href=True):
         href = a_tag['href'].strip()
         text = a_tag.get_text().strip().lower()
         href_lower = href.lower()
 
-        if any(kw in href_lower or kw in text for kw in keywords):
-            full_url = urljoin(base_url, href)
-            # Make sure it stays on the same domain
-            if urlparse(full_url).netloc == urlparse(base_url).netloc:
-                contact_urls.add(full_url)
-                if len(contact_urls) >= 3:  # Cap at top 3 candidate pages
-                    break
+        if any(kw in href_lower or kw in text for kw in CONTACT_KEYWORDS):
+            full_url = urljoin(base_url, href).split('#')[0].rstrip('/')
+            try:
+                link_netloc = urlparse(full_url).netloc.lower().replace('www.', '')
+                # Ensure it belongs to the same business domain
+                if link_netloc == base_netloc and full_url not in contact_urls and full_url != base_url:
+                    contact_urls.add(full_url)
+                    if len(contact_urls) >= 4:
+                        break
+            except Exception:
+                continue
 
     return contact_urls
 
@@ -112,6 +151,12 @@ def fetch_emails_from_website(website_url, timeout=7):
     emails = set()
     website_url = clean_url(website_url)
     if not website_url:
+        return list(emails)
+
+    # Skip social networks and maps links
+    skip_domains = ('facebook.com', 'instagram.com', 'tiktok.com', 'twitter.com', 'x.com', 'linkedin.com', 'youtube.com', 'google.com', 'wa.me')
+    netloc = urlparse(website_url).netloc.lower()
+    if any(s in netloc for s in skip_domains):
         return list(emails)
 
     session = requests.Session()
@@ -135,7 +180,7 @@ def fetch_emails_from_website(website_url, timeout=7):
                         if c_resp.status_code == 200:
                             c_emails = extract_emails_from_html(c_resp.text)
                             emails.update(c_emails)
-                            if emails:  # Stop searching subpages once an email is found
+                            if emails:
                                 break
                     except Exception:
                         continue
@@ -149,7 +194,6 @@ def process_lead(lead, timeout):
     existing_emails = lead.get('emails', []) or []
     website = lead.get('website')
 
-    # If emails are already present, keep them
     if existing_emails:
         return lead, 0
 
@@ -158,7 +202,6 @@ def process_lead(lead, timeout):
 
     found_emails = fetch_emails_from_website(website, timeout=timeout)
     if found_emails:
-        # Deduplicate while preserving order
         combined = list(dict.fromkeys(existing_emails + found_emails))
         lead['emails'] = combined
         return lead, len(found_emails)
