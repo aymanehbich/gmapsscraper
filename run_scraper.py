@@ -144,6 +144,7 @@ def run_scraper():
             # Build Docker command
             docker_cmd = [
                 "docker", "run", "--rm",
+                "--shm-size=2g",
                 "-v", f"{abspath_queries}:/queries.txt:ro",
                 "-v", f"{abspath_out}:/out",
             ]
@@ -160,7 +161,6 @@ def run_scraper():
                 "-input", "/queries.txt",
                 "-results", "/out/raw_results.json",
                 "-json",
-                "-email",
                 "-depth", str(args.depth),
                 "-exit-on-inactivity", args.exit_on_inactivity,
                 "-c", str(args.concurrency)

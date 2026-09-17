@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       niche:
-        description: "Target Niche (e.g. Plumber, Electrician, Dentist)"
+        description: "Target Niche (e.g. Plumber, Electrician, Dentist, HVAC)"
         required: true
         default: "Plumber"
       city:
-        description: "Target City (e.g. Austin, Lyon, Casablanca) or leave blank for all"
+        description: "Target City (e.g. Austin, Lyon, Casablanca, Rabat)"
         required: false
         default: "Austin"
       depth:
         description: "Scroll Depth (items to fetch)"
         required: false
-        default: "20"
+        default: "30"
       enrich_emails:
         description: "Crawl websites to find contact emails?"
         type: boolean
@@ -60,10 +60,15 @@ jobs:
         run: docker pull gosom/google-maps-scraper:latest
 
       - name: 5. Load Proxies (if set in GitHub Secrets)
-        if: env.PROXIES_SECRET != ''
         env:
           PROXIES_SECRET: ${{ secrets.PROXIES_TXT }}
-        run: echo "$PROXIES_SECRET" > proxies.txt
+        run: |
+          if [ -n "$PROXIES_SECRET" ]; then
+            echo "$PROXIES_SECRET" > proxies.txt
+            echo "Proxies loaded successfully into proxies.txt ($(wc -l < proxies.txt) lines)."
+          else
+            echo "No PROXIES_TXT secret found in repository settings."
+          fi
 
       - name: 6. Clean Old Output Directories
         run: |
@@ -78,7 +83,7 @@ jobs:
           if [ -n "${{ inputs.city }}" ]; then
             CMD="$CMD --city \"${{ inputs.city }}\""
           fi
-          if [ "${{ inputs.enrich_emails }}" = "true" ]; then
+          if [ "${{ inputs.enrich_emails }}" = "true" ] || [ "${{ inputs.enrich_emails }}" = true ]; then
             CMD="$CMD --enrich-emails"
           fi
           if [ -f "proxies.txt" ] && [ -s "proxies.txt" ]; then
@@ -92,10 +97,6 @@ jobs:
         run: |
           python -c "
           import json, os, glob, requests
-          try:
-              from modules.email_validator import filter_valid_emails
-          except ImportError:
-              from email_validator import filter_valid_emails
 
           lead_files = glob.glob('output/**/cleaned_leads.json', recursive=True)
           all_leads = []
@@ -107,15 +108,15 @@ jobs:
 
           print(f'Total leads scraped in this run: {len(all_leads)}')
 
-          # Filter and slim
+          # Filter leads with emails
           slim_leads = []
           for lead in all_leads:
               raw_emails = lead.get('emails', [])
               if not raw_emails and lead.get('email'):
                   raw_emails = [lead.get('email')]
               
-              valid_emails = filter_valid_emails(raw_emails)
-              if not valid_emails:
+              clean_emails = [e.strip() for e in raw_emails if isinstance(e, str) and '@' in e]
+              if not clean_emails:
                   continue
 
               slim_leads.append({
@@ -126,7 +127,7 @@ jobs:
                   'custom_subject': '''${{ inputs.custom_subject }}''',
                   'custom_pitch': '''${{ inputs.custom_pitch }}''',
                   'demo_link': '${{ inputs.demo_link }}',
-                  'emails': valid_emails,
+                  'emails': clean_emails,
                   'website': lead.get('website'),
                   'city': lead.get('city') or '${{ inputs.city }}',
                   'state': lead.get('state'),
@@ -141,7 +142,7 @@ jobs:
               res = requests.post(webhook_url, json=slim_leads)
               print(f'n8n Webhook Response: {res.status_code} - {res.text}')
           else:
-              print('No valid leads with emails found in this run.')
+              print('No leads with emails found in this run.')
           "
 
       - name: 9. Save Leads as GitHub Artifact (Backup)
